@@ -51,7 +51,7 @@ fn setup(
                 .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
             ..Default::default()
         })
-        .with(FlyCamera::default());
+        .with(FlyCamera::default())
         .with(SkyboxCamera);
 
     // Add a light source.

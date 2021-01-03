@@ -57,7 +57,6 @@ fn move_skybox(
     camera_query: Query<(&PerspectiveProjection, &Transform, &SkyboxCamera)>,
 ) {
     if let Some((mut pbr_trans, _)) = skybox_query.iter_mut().next() {
-        // TODO better handling
         for (cam_proj, cam_trans, _) in camera_query.iter() {
             *pbr_trans = Transform {
                 translation: cam_trans.translation,

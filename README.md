@@ -12,7 +12,7 @@ See `examples\board_flyover.rs` for an example of its usage.
 
 ## Build
 
-Build using `nightly` toolchain.
+Build using `nightly` toolchain, e.g.
 
 ```
 cargo +nightly run --release --example board_flyover
@@ -29,16 +29,19 @@ The assumptions about the image are listed in `src/image.rs`.
 
 The example puts a skybox around a flat "board". Key/mouse camera movement is provided by `bevy_fly_camera`.
 
+![Board Flyover example](docs/board_flyover.png)
+
 Skybox images come from the following sources.
 
-* **sky1** - https://www.cleanpng.com/png-skybox-cube-mapping-texture-mapping-terragen-textu-1384141
-* **sky2** - https://www.cleanpng.com/png-skybox-texture-mapping-cube-mapping-sky-cloud-920475
+* **sky1.png** - https://www.cleanpng.com/png-skybox-cube-mapping-texture-mapping-terragen-textu-1384141
+* **sky2.png** - https://www.cleanpng.com/png-skybox-texture-mapping-cube-mapping-sky-cloud-920475 (flipped)
 
 ## Futures
 
 So far, this is suitable for demos, not production.
 
-* Lighting is currently from the scene's light source. The skybox should have its own.
+* Lighting is currently from the scene's light source. The `SkyboxBox` should have its own.
 * Some may have a preferred orientation for their skybox that they want to set,
   and the XZ plane may not be horizontal for all.
-* The skybox should have a different draw distance to the rest of the scene.
+* The `SkyboxBox` should have a different draw distance to the rest of the scene.
+* Multiple `SkyboxCamera` objects should be handled better, at least as an error.

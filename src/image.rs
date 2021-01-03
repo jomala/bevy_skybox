@@ -133,11 +133,11 @@ fn find_uv(image: &str) -> Result<(Vec<f32>, Vec<f32>), ImageError> {
     // Return as fractions of whole image.
     let f_x = vec_x
         .iter()
-        .map(|x| (*x as f32) / (rgb.width() as f32))
+        .map(|x| (*x as f32) / ((rgb.width() - 1) as f32))
         .collect::<Vec<f32>>();
     let f_y = vec_y
         .iter()
-        .map(|y| (*y as f32) / (rgb.height() as f32))
+        .map(|y| (*y as f32) / ((rgb.height() - 1) as f32))
         .collect::<Vec<f32>>();
     Ok((f_x, f_y))
 }
