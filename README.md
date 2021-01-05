@@ -8,7 +8,25 @@ rectangle and filling most of its width and height.
 
 ## Usage
 
-See `examples\board_flyover.rs` for an example of its usage.
+The usage is documented in the module comment at the top of `src/lib.rs`.
+
+To demonstrate this, `examples\board_flyover.rs` puts a skybox around a flat "board". Key/mouse camera movement is provided by `bevy_fly_camera`.
+
+![Board Flyover example](docs/board_flyover.png)
+
+Skybox images come from the following sources.
+
+* **sky1.png** - https://www.cleanpng.com/png-skybox-cube-mapping-texture-mapping-terragen-textu-1384141
+* **sky2.png** - https://www.cleanpng.com/png-skybox-texture-mapping-cube-mapping-sky-cloud-920475 (flipped)
+
+## Image processing
+
+Many skybox are available as net images. `bevy_skybox` assumes that the image is a specific net
+of a cube.
+
+The assumptions about the image are listed in `src/image.rs`, but the image is measured like this.
+
+![Measuring the cube net](docs/measuring_the_net.png)
 
 ## Build
 
@@ -17,24 +35,6 @@ Build using `nightly` toolchain, e.g.
 ```
 cargo +nightly run --release --example board_flyover
 ```
-
-## Image processing
-
-Many skybox are available as net images. `bevy_skybox` assumes that the image is a specific net
-of a cube.
-
-The assumptions about the image are listed in `src/image.rs`.
-
-## Example
-
-The example puts a skybox around a flat "board". Key/mouse camera movement is provided by `bevy_fly_camera`.
-
-![Board Flyover example](docs/board_flyover.png)
-
-Skybox images come from the following sources.
-
-* **sky1.png** - https://www.cleanpng.com/png-skybox-cube-mapping-texture-mapping-terragen-textu-1384141
-* **sky2.png** - https://www.cleanpng.com/png-skybox-texture-mapping-cube-mapping-sky-cloud-920475 (flipped)
 
 ## Futures
 
@@ -45,3 +45,5 @@ So far, this is suitable for demos, not production.
   and the XZ plane may not be horizontal for all.
 * The `SkyboxBox` should have a different draw distance to the rest of the scene.
 * Multiple `SkyboxCamera` objects should be handled better, at least as an error.
+* There may be a better interchange response structure from the `image` module than
+  `Mesh` that is more convenient for anyone using a pre-aligned skybox model.

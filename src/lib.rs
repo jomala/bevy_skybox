@@ -56,8 +56,8 @@ fn move_skybox(
     mut skybox_query: Query<(&mut Transform, &SkyboxBox)>,
     camera_query: Query<(&PerspectiveProjection, &Transform, &SkyboxCamera)>,
 ) {
-    if let Some((mut pbr_trans, _)) = skybox_query.iter_mut().next() {
-        for (cam_proj, cam_trans, _) in camera_query.iter() {
+    if let Some((cam_proj, cam_trans, _)) = camera_query.iter().next() {
+        for (mut pbr_trans, _) in skybox_query.iter_mut() {
             *pbr_trans = Transform {
                 translation: cam_trans.translation,
                 rotation: Quat::identity(),
@@ -72,6 +72,9 @@ fn move_skybox(
 pub struct SkyboxCamera;
 
 /// The `SkyboxBox` tag attached to the skybox mesh entity.
+///
+/// This can also be used to tag any other `Transform` that you want to translate with
+/// the `SkyboxCamera`, e.g. a light source.
 pub struct SkyboxBox;
 
 /// The `SkyboxPlugin` object acts as both the plugin and the resource providing the image name.
