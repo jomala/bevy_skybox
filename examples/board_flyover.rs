@@ -52,13 +52,14 @@ fn setup(
             ..Default::default()
         })
         .with(FlyCamera::default())
-        .with(SkyboxCamera);
-
-    // Add a light source.
-    commands.spawn(LightBundle {
-        transform: Transform::from_translation(Vec3::new(0.0, 300.0, 0.0)),
-        ..Default::default()
-    });
+        .with(SkyboxCamera)
+        .with_children(|parent| {
+            // Add a light source for the board that moves with the camera.
+            parent.spawn(LightBundle {
+                transform: Transform::from_translation(Vec3::new(0.0, 300.0, 0.0)),
+                ..Default::default()
+            });
+        });
 
     // Add the "board" as some foreground.
     let mut rng = rand::thread_rng();

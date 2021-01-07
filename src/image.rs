@@ -42,20 +42,64 @@ pub enum ImageError {
     NotAligned,
 }
 
+/// Create the `SkyboxBox` using settings from the `SkyboxPlugin`.
+pub fn create_skybox(
+    commands: &mut Commands,
+    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    plugin: Res<crate::SkyboxPlugin>,
+) {
+    // Get the mesh for the image given.
+    let mesh = get_mesh(&plugin.image).expect("Good image");
+    // Load image as a texture asset.
+    let texture_handle = asset_server.load(plugin.image.as_str());
+    // Even before the texture is loaded we can updated the material.
+    let mat_handle: Handle<StandardMaterial> = materials.add(texture_handle.into());
+    let mat = materials.get_mut(mat_handle.clone()).expect("Material");
+    mat.shaded = false;
+    // Create the PbrBundle tagged as a skybox.
+    commands
+        .spawn(PbrBundle {
+            mesh: meshes.add(mesh),
+            material: mat_handle,
+            ..Default::default()
+        })
+        .with(crate::SkyboxBox);
+}
+
 /// Get the skybox mesh, including the uv values for the given texture
 /// image. The box has unit edges is centred on the origin.
-pub fn get_mesh(image: &str) -> Result<Mesh, ImageError> {
+fn get_mesh(image: &str) -> Result<Mesh, ImageError> {
     let (fx, fy) = find_uv(image)?;
     // This relies on the particular face and vertex order of the
     // `shape::cube`.
     let mut mesh = Mesh::from(shape::Cube { size: -1.0 });
     let uv = VertexAttributeValues::Float2(vec![
-        [fx[1], fy[1]], [fx[0], fy[1]], [fx[0], fy[2]], [fx[1], fy[2]],
-        [fx[2], fy[2]], [fx[3], fy[2]], [fx[3], fy[1]], [fx[2], fy[1]],
-        [fx[3], fy[1]], [fx[3], fy[2]], [fx[4], fy[2]], [fx[4], fy[1]],
-        [fx[1], fy[1]], [fx[1], fy[2]], [fx[2], fy[2]], [fx[2], fy[1]],
-        [fx[3], fy[2]], [fx[2], fy[2]], [fx[2], fy[3]], [fx[3], fy[3]],
-        [fx[3], fy[0]], [fx[2], fy[0]], [fx[2], fy[1]], [fx[3], fy[1]],
+        [fx[1], fy[1]],
+        [fx[0], fy[1]],
+        [fx[0], fy[2]],
+        [fx[1], fy[2]],
+        [fx[2], fy[2]],
+        [fx[3], fy[2]],
+        [fx[3], fy[1]],
+        [fx[2], fy[1]],
+        [fx[3], fy[1]],
+        [fx[3], fy[2]],
+        [fx[4], fy[2]],
+        [fx[4], fy[1]],
+        [fx[1], fy[1]],
+        [fx[1], fy[2]],
+        [fx[2], fy[2]],
+        [fx[2], fy[1]],
+        [fx[3], fy[2]],
+        [fx[2], fy[2]],
+        [fx[2], fy[3]],
+        [fx[3], fy[3]],
+        [fx[3], fy[0]],
+        [fx[2], fy[0]],
+        [fx[2], fy[1]],
+        [fx[3], fy[1]],
     ]);
     mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uv);
     Ok(mesh)

@@ -1,6 +1,8 @@
 [package]
 name = "bevy_skybox"
 description = "A skybox from an image for bevyengine.org"
+categories = ["game-development"]
+keywords = ["bevy", "skybox", "gamedev", "graphics"]
 version = "0.1.0"
 authors = ["Jonathan Lawn <Jonathan.M.Lawn@gmail.com>"]
 license = "MIT OR Apache-2.0"
