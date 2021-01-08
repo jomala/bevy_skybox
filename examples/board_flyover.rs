@@ -3,6 +3,9 @@
 //! An optional positional argument can be used to give the filename of the
 //! skybox image to test (in the `assets` folder, including the suffix).
 //!
+//! The camera has a deliberately limited draw distance (roughly the width
+//! of the board) to show that the skybox is not affected by it.
+//!
 //! ```
 //! cargo +nightly run --release --example board_flyover -- sky2.png
 //! ```
@@ -14,6 +17,7 @@
 //! - Mouse - Look around
 
 use bevy::prelude::*;
+use bevy::render::camera::PerspectiveProjection;
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
 use bevy_skybox::{SkyboxCamera, SkyboxPlugin};
 use rand::Rng;
@@ -47,8 +51,12 @@ fn setup(
     // Add a camera with a the `FlyCamera` controls and a `Skybox` centred on it.
     commands
         .spawn(Camera3dBundle {
-            transform: Transform::from_matrix(Mat4::from_translation(Vec3::new(0.0, 20.0, -40.0)))
+            transform: Transform::from_matrix(Mat4::from_translation(Vec3::new(0.0, 2.0, -4.0)))
                 .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
+            perspective_projection: PerspectiveProjection {
+                far: 200.0,
+                ..Default::default()
+            },
             ..Default::default()
         })
         .with(FlyCamera::default())
@@ -56,24 +64,22 @@ fn setup(
         .with_children(|parent| {
             // Add a light source for the board that moves with the camera.
             parent.spawn(LightBundle {
-                transform: Transform::from_translation(Vec3::new(0.0, 300.0, 0.0)),
+                transform: Transform::from_translation(Vec3::new(0.0, 30.0, 0.0)),
                 ..Default::default()
             });
         });
 
-    // Add the "board" as some foreground.
+    // Add a static "board" as some foreground to show camera movement.
     let mut rng = rand::thread_rng();
     for i in -20..=20 {
         for j in -20..=20 {
+            // Each square is a random shade of green.
             let br = rng.gen::<f32>() * 0.4 + 0.6;
+            let col = Color::rgb(0.6 * br, 1. * br, 0.6 * br);
             commands.spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Plane { size: 10.0 })),
-                material: materials.add(Color::rgb(0.6 * br, 1. * br, 0.6 * br).into()),
-                transform: Transform::from_translation(Vec3::new(
-                    i as f32 * 10.0,
-                    0.0,
-                    j as f32 * 10.0,
-                )),
+                mesh: meshes.add(Mesh::from(shape::Plane { size: 1.0 })),
+                material: materials.add(col.into()),
+                transform: Transform::from_translation(Vec3::new(i as f32, 0.0, j as f32)),
                 ..Default::default()
             });
         }

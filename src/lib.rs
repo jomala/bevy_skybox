@@ -27,7 +27,43 @@ mod image;
 use bevy::prelude::*;
 use bevy::render::camera::PerspectiveProjection;
 
-/// Move the `SkyboxBox` with the camera (or any entity it is attached
+/// Create a secondary camera with a longer draw distance than the main camera.
+fn create_pipeline(
+    commands: &mut Commands,
+    camera_query: Query<(Entity, &PerspectiveProjection, &SkyboxCamera)>,
+    skybox_query: Query<(Entity, &SkyboxBox)>,
+    mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
+    plugin: Res<crate::SkyboxPlugin>,
+) {
+    if let Some((cam, cam_proj, _)) = camera_query.iter().next() {
+        // Add a secondary camera as a child of the main camera but a longer draw distance.
+        //
+        // Assumes that the perspective projection of the main camera does not change.
+        let far_proj = PerspectiveProjection {
+            near: cam_proj.far * 1.5,
+            far: cam_proj.far * 4.0,
+            ..cam_proj.clone()
+        };
+        let child_entity = commands
+            .spawn(Camera3dBundle {
+                perspective_projection: far_proj,
+                ..Default::default()
+            })
+            .current_entity()
+            .expect("Child camera");
+        commands.push_children(cam, &[child_entity]);
+
+        // Make the secondary camera active.
+        active_cameras.add(&plugin.camera_name);
+
+        // Assign the skybox to the secondary camera.
+        for s in skybox_query.iter() {
+            active_cameras.set(&plugin.camera_name, s.0);
+        }
+    }
+}
+
+/// Translate (but don't rotate) the `SkyboxBox` with the camera (or any entity it is attached
 /// to with a Transform property). If it is not attached to such an
 /// entity then it will not move.
 fn move_skybox(
@@ -39,6 +75,8 @@ fn move_skybox(
             *pbr_trans = Transform {
                 translation: cam_trans.translation,
                 rotation: Quat::identity(),
+                // I'm not sure how the scale is working with respect to the draw distances
+                // but it does seem to be.
                 scale: Vec3::new(cam_proj.far, cam_proj.far, cam_proj.far),
             };
         }
@@ -58,13 +96,17 @@ pub struct SkyboxBox;
 /// The `SkyboxPlugin` object acts as both the plugin and the resource providing the image name.
 #[derive(Clone)]
 pub struct SkyboxPlugin {
+    /// The filename of the image in the assets folder.
     image: String,
+    /// The identifying name of the secondary camera and pipeline for rendering the skybox
+    camera_name: String,
 }
 
 impl SkyboxPlugin {
     pub fn from_image_file(image: &str) -> SkyboxPlugin {
         Self {
             image: image.to_owned(),
+            camera_name: "Skybox".to_owned(),
         }
     }
 }
@@ -73,6 +115,7 @@ impl Plugin for SkyboxPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_resource(self.clone());
         app.add_startup_system(image::create_skybox.system());
+        app.add_startup_system(create_pipeline.system());
         app.add_system(move_skybox.system());
     }
 }
