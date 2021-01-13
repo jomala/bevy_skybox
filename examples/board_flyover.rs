@@ -3,7 +3,7 @@
 //! An optional positional argument can be used to give the filename of the
 //! skybox image to test (in the `assets` folder, including the suffix).
 //!
-//! The camera has a deliberately limited draw distance (roughly the width
+//! The camera has a deliberately limited draw distance (roughly twice the width
 //! of the board) to show that the skybox is not affected by it.
 //!
 //! ```
@@ -29,6 +29,10 @@ fn main() {
     let image = env::args().nth(1).unwrap_or("sky1.png".to_owned());
     // Build the window and app.
     App::build()
+        .add_resource(bevy::log::LogSettings {
+            level: bevy::log::Level::TRACE,
+            filter: "wgpu=warn,bevy_ecs=info,bevy_skybox=info".to_string(),
+        })
         .add_resource(WindowDescriptor {
             title: "Skybox Board Flyover".to_string(),
             width: 800.,
@@ -49,16 +53,18 @@ fn setup(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // Add a camera with a the `FlyCamera` controls and a `Skybox` centred on it.
-    commands
-        .spawn(Camera3dBundle {
-            transform: Transform::from_matrix(Mat4::from_translation(Vec3::new(0.0, 2.0, -4.0)))
-                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
-            perspective_projection: PerspectiveProjection {
-                far: 200.0,
-                ..Default::default()
-            },
+    let cam = Camera3dBundle {
+        transform: Transform::from_matrix(Mat4::from_translation(Vec3::new(0.0, 2.0, -4.0)))
+            .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
+        perspective_projection: PerspectiveProjection {
+            far: 200.0,
             ..Default::default()
-        })
+        },
+        ..Default::default()
+    };
+
+    commands
+        .spawn(cam)
         .with(FlyCamera::default())
         .with(SkyboxCamera)
         .with_children(|parent| {
@@ -68,6 +74,7 @@ fn setup(
                 ..Default::default()
             });
         });
+
 
     // Add a static "board" as some foreground to show camera movement.
     let mut rng = rand::thread_rng();

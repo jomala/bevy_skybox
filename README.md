@@ -30,20 +30,9 @@ The assumptions about the image are listed in `src/image.rs`, but the image is m
 
 ## Build
 
-Build using `nightly` toolchain, e.g.
+Build using `stable` or `nightly` toolchain, e.g.
 
 ```
-cargo +nightly run --release --example board_flyover
+cargo run --release --example board_flyover
 ```
 
-## Futures
-
-So far, this is suitable for demos, not production.
-
-* Lighting is currently from the scene's light source. The `SkyboxBox` should have its own.
-* Some may have a preferred orientation for their skybox that they want to set,
-  and the XZ plane may not be horizontal for all.
-* The `SkyboxBox` should have a different draw distance to the rest of the scene.
-* Multiple `SkyboxCamera` objects should be handled better, at least as an error.
-* There may be a better interchange response structure from the `image` module than
-  `Mesh` that is more convenient for anyone using a pre-aligned skybox model.

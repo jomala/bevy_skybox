@@ -143,7 +143,7 @@ fn find_uv(image: &str) -> Result<(Vec<f32>, Vec<f32>), ImageError> {
         .map(|w| w[1] as i32 - w[0] as i32)
         .collect::<Vec<i32>>();
     diff_x.sort_unstable();
-    if diff_x[3] - diff_x[0] > 8 {
+    if diff_x[3] - diff_x[0] > 16 {
         return Err(ImageError::NotAligned);
     }
 
@@ -170,18 +170,25 @@ fn find_uv(image: &str) -> Result<(Vec<f32>, Vec<f32>), ImageError> {
         .map(|w| w[1] as i32 - w[0] as i32)
         .collect::<Vec<i32>>();
     diff_y.sort_unstable();
-    if diff_y[2] - diff_y[0] > 8 {
+    if diff_y[2] - diff_y[0] > 16 {
         return Err(ImageError::NotAligned);
     }
 
-    // Return as fractions of whole image.
+    // Pull in the borders. The matches won't be as good but maybe we can avoid some bad edges.
+    // let adj = 2;
+    // let vec_x = [vec_x[0] + adj, vec_x[1] + adj, vec_x[2] + adj, vec_x[3] - adj, vec_x[4] - adj];
+    // let vec_y = [vec_y[0] + adj, vec_y[1] + adj, vec_y[2] - adj, vec_y[3] - adj];
+
+    // Return as fractions of whole image. Apparently the 0.0 and 1.0 are at the
+    // outer edge of the squares represented by the pixels, and we want the middle
+    // of the edge pixels.
     let f_x = vec_x
         .iter()
-        .map(|x| (*x as f32) / ((rgb.width() - 1) as f32))
+        .map(|x| (*x as f32 + 0.5) / (rgb.width() as f32))
         .collect::<Vec<f32>>();
     let f_y = vec_y
         .iter()
-        .map(|y| (*y as f32) / ((rgb.height() - 1) as f32))
+        .map(|y| (*y as f32 + 0.5) / (rgb.height() as f32))
         .collect::<Vec<f32>>();
     Ok((f_x, f_y))
 }

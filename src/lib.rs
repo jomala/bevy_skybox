@@ -7,9 +7,9 @@
 //! use bevy::prelude::*;
 //! use bevy_skybox::{SkyboxPlugin, SkyboxCamera};
 //!
-//! fn setup(mut commands: Commands) {
+//! fn setup(commands: &mut Commands) {
 //!		commands
-//! 		.spawn(Camera3dComponents::default())
+//! 		.spawn(Camera3dBundle::default())
 //! 		.with(SkyboxCamera);
 //! }
 //!
@@ -17,7 +17,7 @@
 //!		App::build()
 //! 		.add_plugins(DefaultPlugins)
 //! 		.add_startup_system(setup.system())
-//! 		.add_plugin(SkyboxPlugin::from_image_file("sky.png"))
+//! 		.add_plugin(SkyboxPlugin::from_image_file("sky1.png"))
 //! 		.run();
 //! }
 //! ```
@@ -35,6 +35,7 @@ fn create_pipeline(
     mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
     plugin: Res<crate::SkyboxPlugin>,
 ) {
+    // If more than one SkyboxCamera is defined then only one is used.
     if let Some((cam, cam_proj, _)) = camera_query.iter().next() {
         // Add a secondary camera as a child of the main camera but a longer draw distance.
         //
@@ -88,18 +89,15 @@ fn move_skybox(
 pub struct SkyboxCamera;
 
 /// The `SkyboxBox` tag attached to the skybox mesh entity.
-///
-/// This can also be used to tag any other `Transform` that you want to translate with
-/// the `SkyboxCamera`, e.g. a light source.
 pub struct SkyboxBox;
 
 /// The `SkyboxPlugin` object acts as both the plugin and the resource providing the image name.
 #[derive(Clone)]
 pub struct SkyboxPlugin {
     /// The filename of the image in the assets folder.
-    image: String,
+    pub image: String,
     /// The identifying name of the secondary camera and pipeline for rendering the skybox
-    camera_name: String,
+    pub camera_name: String,
 }
 
 impl SkyboxPlugin {
