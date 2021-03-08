@@ -28,10 +28,14 @@
 //! and then paste it into a new file.
 
 use bevy::prelude::*;
-use bevy::render::mesh::VertexAttributeValues;
+use bevy::render::{
+    mesh::VertexAttributeValues, pipeline::PipelineDescriptor, render_graph::RenderGraph,
+};
 use image::{open, Rgb, RgbImage};
 use itertools::Itertools;
 use std::collections::HashMap;
+
+use crate::material::SkyMaterial;
 
 /// `image` module errors.
 #[derive(Debug, Clone, Copy)]
@@ -45,8 +49,11 @@ pub enum ImageError {
 /// Create the `SkyboxBox` using settings from the `SkyboxPlugin`.
 pub fn create_skybox(
     commands: &mut Commands,
+    pipelines: ResMut<Assets<PipelineDescriptor>>,
+    shaders: ResMut<Assets<Shader>>,
+    render_graph: ResMut<RenderGraph>,
     asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<crate::material::SkyMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     plugin: Res<crate::SkyboxPlugin>,
 ) {
@@ -54,19 +61,23 @@ pub fn create_skybox(
         // Get the mesh for the image given.
         let mesh = get_mesh(image).expect("Good image");
         // Load image as a texture asset.
-        let texture_handle = asset_server.load(image.as_str());
+        let texture_handle: Handle<Texture> = asset_server.load(image.as_str());
+
         // Even before the texture is loaded we can updated the material.
-        let mat_handle: Handle<StandardMaterial> = materials.add(texture_handle.into());
-        let mat = materials.get_mut(mat_handle.clone()).expect("Material");
-        mat.shaded = false;
+        let sky_material = materials.add(SkyMaterial {
+            texture: texture_handle,
+        });
+
+        let render_pipelines = SkyMaterial::pipeline(pipelines, shaders, render_graph);
+
         // Create the PbrBundle tagged as a skybox.
         commands
             .spawn(PbrBundle {
                 mesh: meshes.add(mesh),
-                material: mat_handle,
-                // transform: Transform::from_scale(Vec3::splat(300.0)),
+                render_pipelines: render_pipelines.clone(),
                 ..Default::default()
             })
+            .with(sky_material)
             .with(crate::SkyboxBox);
     }
 }

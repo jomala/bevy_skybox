@@ -14,9 +14,11 @@
 //! - Mouse - Look around
 
 use bevy::prelude::*;
-use bevy::render::camera::PerspectiveProjection;
+use bevy::render::{
+    camera::PerspectiveProjection, pipeline::PipelineDescriptor, render_graph::RenderGraph,
+};
 use bevy_fly_camera::{FlyCamera, FlyCameraPlugin};
-use bevy_skybox::{SkyboxBox, SkyboxCamera, SkyboxPlugin};
+use bevy_skybox::{SkyMaterial, SkyboxBox, SkyboxCamera, SkyboxPlugin};
 use rand::Rng;
 
 /// Create the window, add the plugins and set up the entities.
@@ -45,6 +47,11 @@ fn setup(
     commands: &mut Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    pipelines: ResMut<Assets<PipelineDescriptor>>,
+    shaders: ResMut<Assets<Shader>>,
+    render_graph: ResMut<RenderGraph>,
+    mut sky_materials: ResMut<Assets<bevy_skybox::SkyMaterial>>,
 ) {
     // Add a camera with a the `FlyCamera` controls and a `Skybox` centred on it.
     let cam = Camera3dBundle {
@@ -75,26 +82,31 @@ fn setup(
         })
         .with(SkyboxBox)
         .with_children(|parent| {
-            // The `parent`'s transform will be manipulated by the plugin
-            parent.spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Icosphere {
-                    radius: 0.05,
-                    subdivisions: 4,
-                })),
-                material: materials.add(Color::rgb(1.0, 0.5, 0.5).into()),
-                // Props should be positioned near to a radius of 1.0
-                transform: Transform::from_translation(Vec3::new(0.02, 0.005, -1.0)),
-                ..Default::default()
+            let render_pipelines = SkyMaterial::pipeline(pipelines, shaders, render_graph);
+            let texture_handle: Handle<Texture> = asset_server.load("bevy_logo_dark.png");
+            let sky_material = sky_materials.add(SkyMaterial {
+                texture: texture_handle,
             });
-            parent.spawn(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Icosphere {
-                    radius: 0.015,
-                    subdivisions: 3,
-                })),
-                material: materials.add(Color::rgb(1.0, 0.9, 0.9).into()),
-                transform: Transform::from_translation(Vec3::new(0.06, 0.04, -0.95)),
-                ..Default::default()
-            });
+            // The `parent`'s transform translation will be manipulated by the plugin
+            parent
+                .spawn(PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Quad {
+                        flip: false,
+                        size: Vec2::new(20., 7.),
+                    })),
+                    render_pipelines: render_pipelines.clone(),
+                    transform: Transform::from_translation(Vec3::new(-5., 0.1, -20.0)),
+                    ..Default::default()
+                })
+                .with(sky_material.clone());
+            parent
+                .spawn(PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Cube { size: 3. })),
+                    render_pipelines: render_pipelines.clone(),
+                    transform: Transform::from_translation(Vec3::new(5.2, 3.15, -15.0)),
+                    ..Default::default()
+                })
+                .with(sky_material);
         });
 
     // Add a static "board" as some foreground to show camera movement.

@@ -23,31 +23,24 @@
 //! ```
 
 mod image;
+mod material;
+pub use material::SkyMaterial;
 
 use bevy::prelude::*;
-use bevy::render::camera::PerspectiveProjection;
 
 /// Create a secondary camera with a longer draw distance than the main camera.
 fn create_pipeline(
     commands: &mut Commands,
-    camera_query: Query<(Entity, &PerspectiveProjection, &SkyboxCamera)>,
+    camera_query: Query<(Entity, &SkyboxCamera)>,
     skybox_query: Query<(Entity, &SkyboxBox)>,
     mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
     plugin: Res<crate::SkyboxPlugin>,
 ) {
     // If more than one SkyboxCamera is defined then only one is used.
-    if let Some((cam, cam_proj, _)) = camera_query.iter().next() {
-        // Add a secondary camera as a child of the main camera but a longer draw distance.
-        //
-        // Assumes that the perspective projection of the main camera does not change.
-        let far_proj = PerspectiveProjection {
-            near: cam_proj.far * 1.5,
-            far: cam_proj.far * 10.0,
-            ..cam_proj.clone()
-        };
+    if let Some((cam, _)) = camera_query.iter().next() {
+        // Add a secondary camera as a child of the main camera
         let child_entity = commands
             .spawn(Camera3dBundle {
-                perspective_projection: far_proj,
                 ..Default::default()
             })
             .current_entity()
@@ -69,17 +62,14 @@ fn create_pipeline(
 /// entity then it will not move.
 fn move_skybox(
     mut skybox_query: Query<(&mut Transform, &SkyboxBox)>,
-    camera_query: Query<(&PerspectiveProjection, &Transform, &SkyboxCamera)>,
+    camera_query: Query<(&Transform, &SkyboxCamera)>,
 ) {
-    if let Some((cam_proj, cam_trans, _)) = camera_query.iter().next() {
+    if let Some((cam_trans, _)) = camera_query.iter().next() {
         for (mut pbr_trans, _) in skybox_query.iter_mut() {
-            *pbr_trans = Transform {
-                translation: cam_trans.translation,
-                rotation: Quat::identity(),
-                // I'm not sure how the scale is working with respect to the draw distances
-                // but it does seem to be.
-                scale: Vec3::new(cam_proj.far, cam_proj.far, cam_proj.far),
-            };
+            // This could also be achieved by manipulating the ViewProj matrix
+            // in the SkyMaterial shader.
+            pbr_trans.translation = cam_trans.translation;
+            pbr_trans.rotation = Quat::identity();
         }
     }
 }
@@ -120,6 +110,7 @@ impl SkyboxPlugin {
 impl Plugin for SkyboxPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_resource(self.clone());
+        app.add_asset::<material::SkyMaterial>();
         app.add_startup_system(image::create_skybox.system());
         app.add_startup_system(create_pipeline.system());
         app.add_system(move_skybox.system());
