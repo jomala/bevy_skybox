@@ -30,7 +30,7 @@ fn main() {
     // Build the window and app.
     App::build()
         .insert_resource(bevy::log::LogSettings {
-            level: bevy::log::Level::TRACE,
+            level: bevy::log::Level::INFO,
             filter: "wgpu=warn,bevy_ecs=info,bevy_skybox=info".to_string(),
         })
         .insert_resource(WindowDescriptor {
