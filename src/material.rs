@@ -29,9 +29,9 @@ impl SkyMaterial {
                 SKY_FRAGMENT_SHADER,
             ))),
         });
-        descriptor.depth_stencil_state =
+        descriptor.depth_stencil =
             descriptor
-                .depth_stencil_state
+                .depth_stencil
                 .map(|mut depth_stencil_state| {
                     depth_stencil_state.depth_compare =
                         bevy::render::pipeline::CompareFunction::LessEqual;

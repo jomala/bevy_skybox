@@ -7,10 +7,10 @@
 //! use bevy::prelude::*;
 //! use bevy_skybox::{SkyboxPlugin, SkyboxCamera};
 //!
-//! fn setup(commands: &mut Commands) {
+//! fn setup(mut commands: Commands) {
 //!		commands
-//! 		.spawn(Camera3dBundle::default())
-//! 		.with(SkyboxCamera);
+//! 		.spawn_bundle(PerspectiveCameraBundle::default())
+//! 		.insert(SkyboxCamera);
 //! }
 //!
 //! fn main() {
@@ -30,7 +30,7 @@ use bevy::prelude::*;
 
 /// Create a secondary camera with a longer draw distance than the main camera.
 fn create_pipeline(
-    commands: &mut Commands,
+    mut commands: Commands,
     camera_query: Query<(Entity, &SkyboxCamera)>,
     skybox_query: Query<(Entity, &SkyboxBox)>,
     mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
@@ -40,19 +40,18 @@ fn create_pipeline(
     if let Some((cam, _)) = camera_query.iter().next() {
         // Add a secondary camera as a child of the main camera
         let child_entity = commands
-            .spawn(Camera3dBundle {
+            .spawn_bundle(PerspectiveCameraBundle {
                 ..Default::default()
             })
-            .current_entity()
-            .expect("Child camera");
-        commands.push_children(cam, &[child_entity]);
+            .id();
+        commands.entity(cam).push_children(&[child_entity]);
 
         // Make the secondary camera active.
         active_cameras.add(&plugin.camera_name);
 
         // Assign the skybox to the secondary camera.
         for s in skybox_query.iter() {
-            active_cameras.set(&plugin.camera_name, s.0);
+            active_cameras.get_mut(&plugin.camera_name).expect("Camera defined").entity = Some(s.0);
         }
     }
 }
@@ -61,15 +60,15 @@ fn create_pipeline(
 /// to with a Transform property). If it is not attached to such an
 /// entity then it will not move.
 fn move_skybox(
-    mut skybox_query: Query<(&mut Transform, &SkyboxBox)>,
-    camera_query: Query<(&Transform, &SkyboxCamera)>,
+    mut skybox_query: Query<(&mut Transform, &SkyboxBox), Without<SkyboxCamera>>,
+    camera_query: Query<(&Transform, &SkyboxCamera), Without<SkyboxBox>>,
 ) {
     if let Some((cam_trans, _)) = camera_query.iter().next() {
         for (mut pbr_trans, _) in skybox_query.iter_mut() {
             // This could also be achieved by manipulating the ViewProj matrix
             // in the SkyMaterial shader.
             pbr_trans.translation = cam_trans.translation;
-            pbr_trans.rotation = Quat::identity();
+            pbr_trans.rotation = Quat::IDENTITY;
         }
     }
 }
@@ -109,7 +108,7 @@ impl SkyboxPlugin {
 
 impl Plugin for SkyboxPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.add_resource(self.clone());
+        app.insert_resource(self.clone());
         app.add_asset::<material::SkyMaterial>();
         app.add_startup_system(image::create_skybox.system());
         app.add_startup_system(create_pipeline.system());

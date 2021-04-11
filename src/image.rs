@@ -48,7 +48,7 @@ pub enum ImageError {
 
 /// Create the `SkyboxBox` using settings from the `SkyboxPlugin`.
 pub fn create_skybox(
-    commands: &mut Commands,
+    mut commands: Commands,
     pipelines: ResMut<Assets<PipelineDescriptor>>,
     shaders: ResMut<Assets<Shader>>,
     render_graph: ResMut<RenderGraph>,
@@ -72,13 +72,13 @@ pub fn create_skybox(
 
         // Create the PbrBundle tagged as a skybox.
         commands
-            .spawn(PbrBundle {
+            .spawn_bundle(PbrBundle {
                 mesh: meshes.add(mesh),
                 render_pipelines: render_pipelines.clone(),
                 ..Default::default()
             })
-            .with(sky_material)
-            .with(crate::SkyboxBox);
+            .insert(sky_material)
+            .insert(crate::SkyboxBox);
     }
 }
 
