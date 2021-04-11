@@ -7,10 +7,10 @@
 //! use bevy::prelude::*;
 //! use bevy_skybox::{SkyboxPlugin, SkyboxCamera};
 //!
-//! fn setup(commands: &mut Commands) {
+//! fn setup(commands: Commands) {
 //!		commands
-//! 		.spawn(Camera3dBundle::default())
-//! 		.with(SkyboxCamera);
+//! 		.spawn_bundle(Camera3dBundle::default())
+//! 		.insert(SkyboxCamera);
 //! }
 //!
 //! fn main() {
@@ -29,7 +29,7 @@ use bevy::render::camera::PerspectiveProjection;
 
 /// Create a secondary camera with a longer draw distance than the main camera.
 fn create_pipeline(
-    commands: &mut Commands,
+    mut commands: Commands,
     camera_query: Query<(Entity, &PerspectiveProjection, &SkyboxCamera)>,
     skybox_query: Query<(Entity, &SkyboxBox)>,
     mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
@@ -46,20 +46,20 @@ fn create_pipeline(
             ..cam_proj.clone()
         };
         let child_entity = commands
-            .spawn(Camera3dBundle {
+            .spawn_bundle(PerspectiveCameraBundle {
                 perspective_projection: far_proj,
                 ..Default::default()
             })
-            .current_entity()
-            .expect("Child camera");
-        commands.push_children(cam, &[child_entity]);
+            .id();
+        commands.entity(cam).push_children(&[child_entity]);
 
         // Make the secondary camera active.
         active_cameras.add(&plugin.camera_name);
 
         // Assign the skybox to the secondary camera.
+        let cam = active_cameras.get_mut(&plugin.camera_name).unwrap();
         for s in skybox_query.iter() {
-            active_cameras.set(&plugin.camera_name, s.0);
+            cam.entity = Some(s.0);
         }
     }
 }
@@ -68,14 +68,14 @@ fn create_pipeline(
 /// to with a Transform property). If it is not attached to such an
 /// entity then it will not move.
 fn move_skybox(
-    mut skybox_query: Query<(&mut Transform, &SkyboxBox)>,
+    mut skybox_query: Query<(&mut Transform, &SkyboxBox, Without<SkyboxCamera>)>,
     camera_query: Query<(&PerspectiveProjection, &Transform, &SkyboxCamera)>,
 ) {
     if let Some((cam_proj, cam_trans, _)) = camera_query.iter().next() {
-        for (mut pbr_trans, _) in skybox_query.iter_mut() {
+        for (mut pbr_trans, _, _) in skybox_query.iter_mut() {
             *pbr_trans = Transform {
                 translation: cam_trans.translation,
-                rotation: Quat::identity(),
+                rotation: Quat::IDENTITY,
                 // I'm not sure how the scale is working with respect to the draw distances
                 // but it does seem to be.
                 scale: Vec3::new(cam_proj.far, cam_proj.far, cam_proj.far),
@@ -111,7 +111,7 @@ impl SkyboxPlugin {
 
 impl Plugin for SkyboxPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.add_resource(self.clone());
+        app.insert_resource(self.clone());
         app.add_startup_system(image::create_skybox.system());
         app.add_startup_system(create_pipeline.system());
         app.add_system(move_skybox.system());

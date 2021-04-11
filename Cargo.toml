@@ -13,11 +13,11 @@ edition = "2018"
 include = ["src/**/*", "README.md", "CHANGELOG.md"]
 
 [dependencies]
-bevy = "0.4"
+bevy = "0.5"
 image = "0.23"
 itertools = "0.10"
 
 [dev-dependencies]
-bevy_fly_camera = "0.6"
-bevy_log = "0.4"
+bevy_fly_camera = "0.7"
+bevy_log = "0.5"
 rand = "0.8"
