@@ -1,7 +1,11 @@
+## 0.4.0 (2021-04-11)
+
+* Updated for Bevy v0.5
+
 ## 0.3.0 (2021-01-14)
 
 * Shaders are no longer used to light the skybox
-* A secondary camera it added and used for the skybox with a longer draw distance.
+* A secondary camera is added and used for the skybox with a longer draw distance.
 * Take the image from the centre of the border pixels, not the outside edge.
 * Increase the tolerance for poor images.
 * Improve the links in crates.io and the documentation.

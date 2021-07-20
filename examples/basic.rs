@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use bevy_skybox::{SkyboxPlugin, SkyboxCamera};
 
-fn setup(commands: &mut Commands) {
+fn setup(mut commands: Commands) {
 	commands
-		.spawn(Camera3dBundle::default())
-		.with(SkyboxCamera);
+		.spawn_bundle(PerspectiveCameraBundle::default())
+		.insert(SkyboxCamera);
 }
 
 fn main() {
