@@ -50,22 +50,25 @@ pub fn create_skybox(
     mut meshes: ResMut<Assets<Mesh>>,
     plugin: Res<crate::SkyboxPlugin>,
 ) {
-    // Get the mesh for the image given.
-    let mesh = get_mesh(&plugin.image).expect("Good image");
-    // Load image as a texture asset.
-    let texture_handle = asset_server.load(plugin.image.as_str());
-    // Even before the texture is loaded we can updated the material.
-    let mat_handle: Handle<StandardMaterial> = materials.add(texture_handle.into());
-    let mat = materials.get_mut(mat_handle.clone()).expect("Material");
-    mat.unlit = true;
-    // Create the PbrBundle tagged as a skybox.
-    commands
-        .spawn_bundle(PbrBundle {
-            mesh: meshes.add(mesh),
-            material: mat_handle,
-            ..Default::default()
-        })
-        .insert(crate::SkyboxBox);
+    if let Some(image) = &plugin.image {
+        // Get the mesh for the image given.
+        let mesh = get_mesh(image).expect("Good image");
+        // Load image as a texture asset.
+        let texture_handle = asset_server.load(image.as_str());
+        // Even before the texture is loaded we can updated the material.
+        let mat_handle: Handle<StandardMaterial> = materials.add(texture_handle.into());
+        let mat = materials.get_mut(mat_handle.clone()).expect("Material");
+        mat.unlit = false;
+        // Create the PbrBundle tagged as a skybox.
+        commands
+            .spawn(PbrBundle {
+                mesh: meshes.add(mesh),
+                material: mat_handle,
+                // transform: Transform::from_scale(Vec3::splat(300.0)),
+                ..Default::default()
+            })
+            .with(crate::SkyboxBox);
+    }
 }
 
 /// Get the skybox mesh, including the uv values for the given texture

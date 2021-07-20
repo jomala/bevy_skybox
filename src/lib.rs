@@ -42,7 +42,7 @@ fn create_pipeline(
         // Assumes that the perspective projection of the main camera does not change.
         let far_proj = PerspectiveProjection {
             near: cam_proj.far * 1.5,
-            far: cam_proj.far * 4.0,
+            far: cam_proj.far * 10.0,
             ..cam_proj.clone()
         };
         let child_entity = commands
@@ -95,7 +95,7 @@ pub struct SkyboxBox;
 #[derive(Clone)]
 pub struct SkyboxPlugin {
     /// The filename of the image in the assets folder.
-    pub image: String,
+    pub image: Option<String>,
     /// The identifying name of the secondary camera and pipeline for rendering the skybox
     pub camera_name: String,
 }
@@ -103,7 +103,15 @@ pub struct SkyboxPlugin {
 impl SkyboxPlugin {
     pub fn from_image_file(image: &str) -> SkyboxPlugin {
         Self {
-            image: image.to_owned(),
+            image: Some(image.to_owned()),
+            camera_name: "Skybox".to_owned(),
+        }
+    }
+    /// Does not create an image cube, props must then be added to SkyboxCamera
+    /// with a `SkyboxBox` component.
+    pub fn empty() -> SkyboxPlugin {
+        Self {
+            image: None,
             camera_name: "Skybox".to_owned(),
         }
     }
