@@ -1,3 +1,8 @@
+## 0.5.0 (2021-07-21)
+
+* Add "props" demo (thanks gipsy-king)
+* Use depth stencil, not near/far of camera (thank gipsy-king!)
+
 ## 0.4.0 (2021-04-11)
 
 * Updated for Bevy v0.5

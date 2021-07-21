@@ -46,7 +46,8 @@ fn create_pipeline(
             ..cam_proj.clone()
         };
         let child_entity = commands
-            .spawn_bundle(PerspectiveCameraBundle {
+            .spawn()
+            .insert_bundle(PerspectiveCameraBundle {
                 perspective_projection: far_proj,
                 ..Default::default()
             })

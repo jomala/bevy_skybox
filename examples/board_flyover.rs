@@ -64,15 +64,17 @@ fn setup(
     };
 
     commands
-        .spawn_bundle(cam)
+        .spawn()
+        .insert_bundle(cam)
         .insert(FlyCamera::default())
         .insert(SkyboxCamera)
         .with_children(|parent| {
             // Add a light source for the board that moves with the camera.
-            parent.spawn_bundle(LightBundle {
-                transform: Transform::from_translation(Vec3::new(0.0, 30.0, 0.0)),
-                ..Default::default()
-            });
+            parent.spawn()
+                .insert_bundle(LightBundle {
+                    transform: Transform::from_translation(Vec3::new(0.0, 30.0, 0.0)),
+                    ..Default::default()
+                });
         });
 
 
@@ -83,12 +85,13 @@ fn setup(
             // Each square is a random shade of green.
             let br = rng.gen::<f32>() * 0.4 + 0.6;
             let col = Color::rgb(0.6 * br, 1. * br, 0.6 * br);
-            commands.spawn_bundle(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Plane { size: 1.0 })),
-                material: materials.add(col.into()),
-                transform: Transform::from_translation(Vec3::new(i as f32, 0.0, j as f32)),
-                ..Default::default()
-            });
+            commands.spawn()
+                .insert_bundle(PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Plane { size: 1.0 })),
+                    material: materials.add(col.into()),
+                    transform: Transform::from_translation(Vec3::new(i as f32, 0.0, j as f32)),
+                    ..Default::default()
+                });
         }
     }
 }

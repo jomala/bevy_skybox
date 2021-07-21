@@ -61,13 +61,14 @@ pub fn create_skybox(
         mat.unlit = false;
         // Create the PbrBundle tagged as a skybox.
         commands
-            .spawn(PbrBundle {
+            .spawn()
+            .insert_bundle(PbrBundle {
                 mesh: meshes.add(mesh),
                 material: mat_handle,
                 // transform: Transform::from_scale(Vec3::splat(300.0)),
                 ..Default::default()
             })
-            .with(crate::SkyboxBox);
+            .insert(crate::SkyboxBox);
     }
 }
 
