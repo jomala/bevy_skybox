@@ -9,7 +9,8 @@
 //!
 //! fn setup(mut commands: Commands) {
 //!		commands
-//! 		.spawn_bundle(PerspectiveCameraBundle::default())
+//! 		.spawn()
+//! 		.insert_bundle(PerspectiveCameraBundle::default())
 //! 		.insert(SkyboxCamera);
 //! }
 //!
@@ -40,9 +41,8 @@ fn create_pipeline(
     if let Some((cam, _)) = camera_query.iter().next() {
         // Add a secondary camera as a child of the main camera
         let child_entity = commands
-            .spawn_bundle(PerspectiveCameraBundle {
-                ..Default::default()
-            })
+            .spawn()
+            .insert_bundle(PerspectiveCameraBundle::default())
             .id();
         commands.entity(cam).push_children(&[child_entity]);
 
@@ -51,7 +51,10 @@ fn create_pipeline(
 
         // Assign the skybox to the secondary camera.
         for s in skybox_query.iter() {
-            active_cameras.get_mut(&plugin.camera_name).expect("Camera defined").entity = Some(s.0);
+            active_cameras
+                .get_mut(&plugin.camera_name)
+                .expect("Camera defined")
+                .entity = Some(s.0);
         }
     }
 }
@@ -61,7 +64,7 @@ fn create_pipeline(
 /// entity then it will not move.
 fn move_skybox(
     mut skybox_query: Query<(&mut Transform, &SkyboxBox), Without<SkyboxCamera>>,
-    camera_query: Query<(&Transform, &SkyboxCamera), Without<SkyboxBox>>,
+    camera_query: Query<(&Transform, &SkyboxCamera)>,
 ) {
     if let Some((cam_trans, _)) = camera_query.iter().next() {
         for (mut pbr_trans, _) in skybox_query.iter_mut() {

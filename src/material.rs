@@ -29,15 +29,11 @@ impl SkyMaterial {
                 SKY_FRAGMENT_SHADER,
             ))),
         });
-        descriptor.depth_stencil =
-            descriptor
-                .depth_stencil
-                .map(|mut depth_stencil_state| {
-                    depth_stencil_state.depth_compare =
-                        bevy::render::pipeline::CompareFunction::LessEqual;
-                    depth_stencil_state.depth_write_enabled = false;
-                    depth_stencil_state
-                });
+        descriptor.depth_stencil = descriptor.depth_stencil.map(|mut depth_stencil_state| {
+            depth_stencil_state.depth_compare = bevy::render::pipeline::CompareFunction::LessEqual;
+            depth_stencil_state.depth_write_enabled = false;
+            depth_stencil_state
+        });
 
         let sky_pipeline_handle = pipelines.add(descriptor);
         render_graph.add_system_node(

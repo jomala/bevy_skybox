@@ -72,7 +72,8 @@ pub fn create_skybox(
 
         // Create the PbrBundle tagged as a skybox.
         commands
-            .spawn_bundle(PbrBundle {
+            .spawn()
+            .insert_bundle(PbrBundle {
                 mesh: meshes.add(mesh),
                 render_pipelines: render_pipelines.clone(),
                 ..Default::default()

@@ -3,13 +3,14 @@ name = "bevy_skybox"
 description = "A skybox from an image for bevyengine.org"
 categories = ["game-development"]
 keywords = ["bevy", "skybox", "gamedev", "graphics"]
-version = "0.3.0"
+version = "0.5.0"
 authors = ["Jonathan Lawn <Jonathan.M.Lawn@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 documentation = "https://docs.rs/bevy_skybox/"
 repository = "https://github.com/jomala/bevy_skybox/"
 edition = "2018"
+include = ["src/**/*", "README.md", "CHANGELOG.md"]
 
 [dependencies]
 bevy = "0.5"
