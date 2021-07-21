@@ -10,7 +10,7 @@ readme = "README.md"
 documentation = "https://docs.rs/bevy_skybox/"
 repository = "https://github.com/jomala/bevy_skybox/"
 edition = "2018"
-include = ["src/**/*", "README.md", "CHANGELOG.md"]
+include = ["src/**/*", "README.md", "CHANGELOG.md", "assets/*.vert", "assets/*.frag"]
 
 [dependencies]
 bevy = "0.5"
