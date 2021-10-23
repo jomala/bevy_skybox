@@ -115,6 +115,6 @@ impl Plugin for SkyboxPlugin {
         app.add_asset::<material::SkyMaterial>();
         app.add_startup_system(image::create_skybox.system());
         app.add_startup_system(create_pipeline.system());
-        app.add_system(move_skybox.system().label("skybox"));
+        app.add_system_to_stage(CoreStage::PostUpdate, move_skybox.system().label("skybox"));
     }
 }
