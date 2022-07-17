@@ -11,13 +11,16 @@ documentation = "https://docs.rs/bevy_skybox/"
 repository = "https://github.com/jomala/bevy_skybox/"
 edition = "2018"
 include = ["src/**/*", "README.md", "CHANGELOG.md", "assets/*.vert", "assets/*.frag"]
+resolver = "2" #for updated rust version
 
 [dependencies]
 bevy = "0.5"
-image = "0.23"
+#bevy = "0.7.0"
+image = "0.24.2"
 itertools = "0.10"
 
 [dev-dependencies]
 bevy_fly_camera = "0.7"
-bevy_log = "0.5"
+#bevy_fly_camera = {path = "./bevy_fly_camera-master"} #0.8
+bevy_log = "0.7.0"
 rand = "0.8"

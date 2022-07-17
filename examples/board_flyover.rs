@@ -26,7 +26,7 @@ use std::env;
 /// Create the window, add the plugins and set up the entities.
 fn main() {
     // Get the skybox image.
-    let image = env::args().nth(1).unwrap_or("sky1.png".to_owned());
+    let image = env::args().nth(1).unwrap_or("clear_sky.png".to_owned());
     // Build the window and app.
     App::build()
         .insert_resource(bevy::log::LogSettings {

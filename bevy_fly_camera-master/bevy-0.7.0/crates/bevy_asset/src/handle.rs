@@ -1,0 +1,426 @@
+use std::{
+    cmp::Ordering,
+    fmt::Debug,
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
+
+use crate::{
+    path::{AssetPath, AssetPathId},
+    Asset, Assets,
+};
+use bevy_ecs::{component::Component, reflect::ReflectComponent};
+use bevy_reflect::{FromReflect, Reflect, ReflectDeserialize};
+use bevy_utils::Uuid;
+use crossbeam_channel::{Receiver, Sender};
+use serde::{Deserialize, Serialize};
+
+/// A unique, stable asset id
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Hash,
+    Ord,
+    PartialOrd,
+    Serialize,
+    Deserialize,
+    Reflect,
+    FromReflect,
+)]
+#[reflect_value(Serialize, Deserialize, PartialEq, Hash)]
+pub enum HandleId {
+    Id(Uuid, u64),
+    AssetPathId(AssetPathId),
+}
+
+impl From<AssetPathId> for HandleId {
+    fn from(value: AssetPathId) -> Self {
+        HandleId::AssetPathId(value)
+    }
+}
+
+impl<'a> From<AssetPath<'a>> for HandleId {
+    fn from(value: AssetPath<'a>) -> Self {
+        HandleId::AssetPathId(AssetPathId::from(value))
+    }
+}
+
+impl HandleId {
+    #[inline]
+    pub fn random<T: Asset>() -> Self {
+        HandleId::Id(T::TYPE_UUID, rand::random())
+    }
+
+    #[inline]
+    pub fn default<T: Asset>() -> Self {
+        HandleId::Id(T::TYPE_UUID, 0)
+    }
+
+    #[inline]
+    pub const fn new(type_uuid: Uuid, id: u64) -> Self {
+        HandleId::Id(type_uuid, id)
+    }
+}
+
+/// A handle into a specific Asset of type `T`
+///
+/// Handles contain a unique id that corresponds to a specific asset in the [Assets](crate::Assets)
+/// collection.
+///
+/// # Accessing the Asset
+///
+/// A handle is _not_ the asset itself, but should be seen as a pointer to the asset. Modifying a
+/// handle's `id` only modifies which asset is being pointed to. To get the actual asset, try using
+/// [`Assets::get`](crate::Assets::get) or [`Assets::get_mut`](crate::Assets::get_mut).
+///
+/// # Strong and Weak
+///
+/// A handle can be either "Strong" or "Weak". Simply put: Strong handles keep the asset loaded,
+/// while Weak handles do not affect the loaded status of assets. This is due to a type of
+/// _reference counting_. When the number of Strong handles that exist for any given asset reach
+/// zero, the asset is dropped and becomes unloaded. In some cases, you might want a reference to an
+/// asset but don't want to take the responsibility of keeping it loaded that comes with a Strong handle.
+/// This is where a Weak handle can be very useful.
+///
+/// For example, imagine you have a `Sprite` component and a `Collider` component. The `Collider` uses
+/// the `Sprite`'s image size to check for collisions. It does so by keeping a Weak copy of the
+/// `Sprite`'s Strong handle to the image asset.
+///
+/// If the `Sprite` is removed, its Strong handle to the image is dropped with it. And since it was the
+/// only Strong handle for that asset, the asset is unloaded. Our `Collider` component still has a Weak
+/// handle to the unloaded asset, but it will not be able to retrieve the image data, resulting in
+/// collisions no longer being detected for that entity.
+///
+#[derive(Component, Reflect, FromReflect)]
+#[reflect(Component)]
+pub struct Handle<T>
+where
+    T: Asset,
+{
+    /// The ID of the asset as contained within its respective [Assets](crate::Assets) collection
+    pub id: HandleId,
+    #[reflect(ignore)]
+    handle_type: HandleType,
+    #[reflect(ignore)]
+    // NOTE: PhantomData<fn() -> T> gives this safe Send/Sync impls
+    marker: PhantomData<fn() -> T>,
+}
+
+enum HandleType {
+    Weak,
+    Strong(Sender<RefChange>),
+}
+
+// FIXME: This only is needed because `Handle`'s field `handle_type` is currently ignored for reflection
+impl Default for HandleType {
+    fn default() -> Self {
+        Self::Weak
+    }
+}
+
+impl Debug for HandleType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HandleType::Weak => f.write_str("Weak"),
+            HandleType::Strong(_) => f.write_str("Strong"),
+        }
+    }
+}
+
+impl<T: Asset> Handle<T> {
+    pub(crate) fn strong(id: HandleId, ref_change_sender: Sender<RefChange>) -> Self {
+        ref_change_sender.send(RefChange::Increment(id)).unwrap();
+        Self {
+            id,
+            handle_type: HandleType::Strong(ref_change_sender),
+            marker: PhantomData,
+        }
+    }
+
+    #[inline]
+    pub fn weak(id: HandleId) -> Self {
+        Self {
+            id,
+            handle_type: HandleType::Weak,
+            marker: PhantomData,
+        }
+    }
+
+    /// Get a copy of this handle as a Weak handle
+    pub fn as_weak<U: Asset>(&self) -> Handle<U> {
+        Handle {
+            id: self.id,
+            handle_type: HandleType::Weak,
+            marker: PhantomData,
+        }
+    }
+
+    pub fn is_weak(&self) -> bool {
+        matches!(self.handle_type, HandleType::Weak)
+    }
+
+    pub fn is_strong(&self) -> bool {
+        matches!(self.handle_type, HandleType::Strong(_))
+    }
+
+    /// Makes this handle Strong if it wasn't already.
+    ///
+    /// This method requires the corresponding [Assets](crate::Assets) collection
+    pub fn make_strong(&mut self, assets: &mut Assets<T>) {
+        if self.is_strong() {
+            return;
+        }
+        let sender = assets.ref_change_sender.clone();
+        sender.send(RefChange::Increment(self.id)).unwrap();
+        self.handle_type = HandleType::Strong(sender);
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn clone_weak(&self) -> Self {
+        Self::weak(self.id)
+    }
+
+    pub fn clone_untyped(&self) -> HandleUntyped {
+        match &self.handle_type {
+            HandleType::Strong(sender) => HandleUntyped::strong(self.id, sender.clone()),
+            HandleType::Weak => HandleUntyped::weak(self.id),
+        }
+    }
+
+    pub fn clone_weak_untyped(&self) -> HandleUntyped {
+        HandleUntyped::weak(self.id)
+    }
+}
+
+impl<T: Asset> Drop for Handle<T> {
+    fn drop(&mut self) {
+        match self.handle_type {
+            HandleType::Strong(ref sender) => {
+                // ignore send errors because this means the channel is shut down / the game has
+                // stopped
+                let _ = sender.send(RefChange::Decrement(self.id));
+            }
+            HandleType::Weak => {}
+        }
+    }
+}
+
+impl<T: Asset> From<Handle<T>> for HandleId {
+    fn from(value: Handle<T>) -> Self {
+        value.id
+    }
+}
+
+impl From<HandleUntyped> for HandleId {
+    fn from(value: HandleUntyped) -> Self {
+        value.id
+    }
+}
+
+impl From<&str> for HandleId {
+    fn from(value: &str) -> Self {
+        AssetPathId::from(value).into()
+    }
+}
+
+impl From<&String> for HandleId {
+    fn from(value: &String) -> Self {
+        AssetPathId::from(value).into()
+    }
+}
+
+impl From<String> for HandleId {
+    fn from(value: String) -> Self {
+        AssetPathId::from(&value).into()
+    }
+}
+
+impl<T: Asset> From<&Handle<T>> for HandleId {
+    fn from(value: &Handle<T>) -> Self {
+        value.id
+    }
+}
+
+impl<T: Asset> Hash for Handle<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(&self.id, state);
+    }
+}
+
+impl<T: Asset> PartialEq for Handle<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl<T: Asset> Eq for Handle<T> {}
+
+impl<T: Asset> PartialOrd for Handle<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.id.cmp(&other.id))
+    }
+}
+
+impl<T: Asset> Ord for Handle<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl<T: Asset> Default for Handle<T> {
+    fn default() -> Self {
+        Handle::weak(HandleId::default::<T>())
+    }
+}
+
+impl<T: Asset> Debug for Handle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        let name = std::any::type_name::<T>().split("::").last().unwrap();
+        write!(f, "{:?}Handle<{}>({:?})", self.handle_type, name, self.id)
+    }
+}
+
+impl<T: Asset> Clone for Handle<T> {
+    fn clone(&self) -> Self {
+        match self.handle_type {
+            HandleType::Strong(ref sender) => Handle::strong(self.id, sender.clone()),
+            HandleType::Weak => Handle::weak(self.id),
+        }
+    }
+}
+
+/// A non-generic version of [Handle]
+///
+/// This allows handles to be mingled in a cross asset context. For example, storing `Handle<A>` and
+/// `Handle<B>` in the same `HashSet<HandleUntyped>`.
+///
+/// To convert back to a typed handle, use the [typed](HandleUntyped::typed) method.
+#[derive(Debug)]
+pub struct HandleUntyped {
+    pub id: HandleId,
+    handle_type: HandleType,
+}
+
+impl HandleUntyped {
+    pub const fn weak_from_u64(uuid: Uuid, id: u64) -> Self {
+        Self {
+            id: HandleId::new(uuid, id),
+            handle_type: HandleType::Weak,
+        }
+    }
+
+    pub(crate) fn strong(id: HandleId, ref_change_sender: Sender<RefChange>) -> Self {
+        ref_change_sender.send(RefChange::Increment(id)).unwrap();
+        Self {
+            id,
+            handle_type: HandleType::Strong(ref_change_sender),
+        }
+    }
+
+    pub fn weak(id: HandleId) -> Self {
+        Self {
+            id,
+            handle_type: HandleType::Weak,
+        }
+    }
+
+    #[must_use]
+    pub fn clone_weak(&self) -> Self {
+        Self::weak(self.id)
+    }
+
+    pub fn is_weak(&self) -> bool {
+        matches!(self.handle_type, HandleType::Weak)
+    }
+
+    pub fn is_strong(&self) -> bool {
+        matches!(self.handle_type, HandleType::Strong(_))
+    }
+
+    /// Convert this handle into a typed [Handle].
+    ///
+    /// The new handle will maintain the Strong or Weak status of the current handle.
+    pub fn typed<T: Asset>(mut self) -> Handle<T> {
+        if let HandleId::Id(type_uuid, _) = self.id {
+            assert!(
+                T::TYPE_UUID == type_uuid,
+                "Attempted to convert handle to invalid type."
+            );
+        }
+        let handle_type = match &self.handle_type {
+            HandleType::Strong(sender) => HandleType::Strong(sender.clone()),
+            HandleType::Weak => HandleType::Weak,
+        };
+        // ensure we don't send the RefChange event when "self" is dropped
+        self.handle_type = HandleType::Weak;
+        Handle {
+            handle_type,
+            id: self.id,
+            marker: PhantomData::default(),
+        }
+    }
+}
+
+impl Drop for HandleUntyped {
+    fn drop(&mut self) {
+        match self.handle_type {
+            HandleType::Strong(ref sender) => {
+                // ignore send errors because this means the channel is shut down / the game has
+                // stopped
+                let _ = sender.send(RefChange::Decrement(self.id));
+            }
+            HandleType::Weak => {}
+        }
+    }
+}
+
+impl From<&HandleUntyped> for HandleId {
+    fn from(value: &HandleUntyped) -> Self {
+        value.id
+    }
+}
+
+impl Hash for HandleUntyped {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        Hash::hash(&self.id, state);
+    }
+}
+
+impl PartialEq for HandleUntyped {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for HandleUntyped {}
+
+impl Clone for HandleUntyped {
+    fn clone(&self) -> Self {
+        match self.handle_type {
+            HandleType::Strong(ref sender) => HandleUntyped::strong(self.id, sender.clone()),
+            HandleType::Weak => HandleUntyped::weak(self.id),
+        }
+    }
+}
+
+pub(crate) enum RefChange {
+    Increment(HandleId),
+    Decrement(HandleId),
+}
+
+#[derive(Clone)]
+pub(crate) struct RefChangeChannel {
+    pub sender: Sender<RefChange>,
+    pub receiver: Receiver<RefChange>,
+}
+
+impl Default for RefChangeChannel {
+    fn default() -> Self {
+        let (sender, receiver) = crossbeam_channel::unbounded();
+        RefChangeChannel { sender, receiver }
+    }
+}
