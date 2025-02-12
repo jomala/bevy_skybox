@@ -1,3 +1,7 @@
+## 0.6.0 (2025-02-11)
+
+* Updated for Bevy v0.15
+
 ## 0.5.0 (2021-07-21)
 
 * Add "props" demo (thanks gipsy-king)

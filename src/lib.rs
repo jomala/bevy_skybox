@@ -5,22 +5,21 @@
 //!
 //! ```rust
 //! use bevy::prelude::*;
-//! use bevy_skybox::{SkyboxPlugin, SkyboxCamera};
+//! use bevy_skybox::{SkyboxCamera, SkyboxPlugin};
 //!
 //! fn setup(mut commands: Commands) {
-//!		commands
-//! 		.spawn()
-//! 		.insert_bundle(PerspectiveCameraBundle::default())
-//! 		.insert(SkyboxCamera);
-//! }
+//!    commands.spawn((
+//!        Camera3d,
+//!        SkyboxCamera,
+//!    ));}
 //!
 //! fn main() {
-//!		App::build()
-//! 		.add_plugins(DefaultPlugins)
-//! 		.add_startup_system(setup.system())
-//! 		.add_plugin(SkyboxPlugin::from_image_file("sky1.png"))
-//! 		.run();
-//! }
+//!    App::build()
+//!        .add_plugins(DefaultPlugins)
+//!        .add_systems(Startup, setup)
+//!        .add_plugin(SkyboxPlugin::from_image_file("sky1.png"))
+//!        .run();
+//!
 //! ```
 
 mod image;
@@ -28,33 +27,25 @@ mod material;
 pub use material::SkyMaterial;
 
 use bevy::prelude::*;
+use bevy::render::view::visibility::RenderLayers;
 
 /// Create a secondary camera with a longer draw distance than the main camera.
 fn create_pipeline(
     mut commands: Commands,
     camera_query: Query<(Entity, &SkyboxCamera)>,
-    skybox_query: Query<(Entity, &SkyboxBox)>,
-    mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
-    plugin: Res<crate::SkyboxPlugin>,
+    skybox_query: Query<Entity, With<SkyboxBox>>,
 ) {
     // If more than one SkyboxCamera is defined then only one is used.
     if let Some((cam, _)) = camera_query.iter().next() {
         // Add a secondary camera as a child of the main camera
         let child_entity = commands
-            .spawn()
-            .insert_bundle(PerspectiveCameraBundle::default())
+            .spawn((Camera3d::default(), RenderLayers::layer(1), SkyboxSecondaryCamera))
             .id();
-        commands.entity(cam).push_children(&[child_entity]);
-
-        // Make the secondary camera active.
-        active_cameras.add(&plugin.camera_name);
+        commands.entity(cam).add_children(&[child_entity]);
 
         // Assign the skybox to the secondary camera.
         for s in skybox_query.iter() {
-            active_cameras
-                .get_mut(&plugin.camera_name)
-                .expect("Camera defined")
-                .entity = Some(s.0);
+            commands.entity(s).insert(RenderLayers::layer(1));
         }
     }
 }
@@ -78,13 +69,20 @@ fn move_skybox(
 
 /// The `SkyboxCamera` tag attached to the camera (Translation) entity that
 /// triggers the skybox to move with the camera.
+#[derive(Component)]
 pub struct SkyboxCamera;
 
+/// The `SkyboxSecondaryCamera` tag attached to the primary camera entity that
+/// and gives the infinite view distance for the skybox.
+#[derive(Component)]
+pub struct SkyboxSecondaryCamera;
+
 /// The `SkyboxBox` tag attached to the skybox mesh entity.
+#[derive(Component)]
 pub struct SkyboxBox;
 
 /// The `SkyboxPlugin` object acts as both the plugin and the resource providing the image name.
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct SkyboxPlugin {
     /// The filename of the image in the assets folder.
     pub image: Option<String>,
@@ -110,11 +108,9 @@ impl SkyboxPlugin {
 }
 
 impl Plugin for SkyboxPlugin {
-    fn build(&self, app: &mut AppBuilder) {
-        app.insert_resource(self.clone());
-        app.add_asset::<material::SkyMaterial>();
-        app.add_startup_system(image::create_skybox.system());
-        app.add_startup_system(create_pipeline.system());
-        app.add_system_to_stage(CoreStage::PostUpdate, move_skybox.system().label("skybox"));
+    fn build(&self, app: &mut App) {
+        app.insert_resource(self.clone())
+            .add_systems(Startup, (image::create_skybox, create_pipeline))
+            .add_systems(PostUpdate, move_skybox);
     }
 }

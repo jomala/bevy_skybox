@@ -7,7 +7,7 @@ use bevy::render::{
     shader::{ShaderStage, ShaderStages},
 };
 
-#[derive(RenderResources, Default, TypeUuid)]
+#[derive(RenderResources, Default, TypeUuid, Asset)]
 #[uuid = "a9ef25aa-cfa7-4990-81b9-cd02533ac3f1"]
 pub struct SkyMaterial {
     pub texture: Handle<Texture>,

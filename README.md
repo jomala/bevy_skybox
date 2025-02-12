@@ -32,7 +32,12 @@ The assumptions about the image are listed in `src/image.rs`, but the image is m
 
 Build using `stable` or `nightly` toolchain, e.g.
 
-```
+```sh
 cargo run --release --example board_flyover
 ```
 
+## Compatibility
+
+Currently compatible with Bevy 0.15.
+
+Raise an issue or PR if you need support for other versions of Bevy.

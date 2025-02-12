@@ -29,7 +29,7 @@
 
 use bevy::prelude::*;
 use bevy::render::{
-    mesh::VertexAttributeValues, pipeline::PipelineDescriptor, render_graph::RenderGraph,
+    mesh::VertexAttributeValues, render_resource::PipelineDescriptor, render_graph::RenderGraph,
 };
 use image::{open, Rgb, RgbImage};
 use itertools::Itertools;
@@ -71,15 +71,12 @@ pub fn create_skybox(
         let render_pipelines = SkyMaterial::pipeline(pipelines, shaders, render_graph);
 
         // Create the PbrBundle tagged as a skybox.
-        commands
-            .spawn()
-            .insert_bundle(PbrBundle {
-                mesh: meshes.add(mesh),
-                render_pipelines: render_pipelines.clone(),
-                ..Default::default()
-            })
-            .insert(sky_material)
-            .insert(crate::SkyboxBox);
+        commands.spawn((
+            Mesh3d(meshes.add(mesh)),
+            MeshMaterial3d(sky_material),
+            RenderPipeline(render_pipeline),
+            crate::SkyboxBox,
+        ));
     }
 }
 
@@ -116,7 +113,7 @@ fn get_mesh(image: &str) -> Result<Mesh, ImageError> {
         [fx[2], fy[1]],
         [fx[3], fy[1]],
     ]);
-    mesh.set_attribute(Mesh::ATTRIBUTE_UV_0, uv);
+    *mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0).expect("Attribute expected") = uv;
     Ok(mesh)
 }
 

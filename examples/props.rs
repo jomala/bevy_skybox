@@ -38,7 +38,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(FlyCameraPlugin)
         .add_plugin(SkyboxPlugin::empty())
-        .add_startup_system(setup.system())
+        .add_systems(Startup, setup)
         .run();
 }
 
@@ -54,33 +54,31 @@ fn setup(
     mut sky_materials: ResMut<Assets<bevy_skybox::SkyMaterial>>,
 ) {
     // Add a camera with a the `FlyCamera` controls and a `Skybox` centred on it.
-    let cam = PerspectiveCameraBundle {
-        transform: Transform::from_matrix(Mat4::from_translation(Vec3::new(0.0, 2.0, -4.0)))
-            .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
-        perspective_projection: PerspectiveProjection {
-            far: 200.0,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-
     commands
-        .spawn()
-        .insert_bundle(cam)
-        .insert(FlyCamera::default())
-        .insert(SkyboxCamera)
+        .spawn((
+            Camera3d,
+            Transform::from_matrix(Mat4::from_translation(Vec3::new(0.0, 2.0, -4.0)))
+                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)),
+            PerspectiveProjection {
+                far: 200.0,
+                ..Default::default()
+            },
+            FlyCamera::default(),
+            SkyboxCamera,
+        ))
         .with_children(|parent| {
             // Add a light source for the board that moves with the camera.
-            parent.spawn().insert_bundle(LightBundle {
+            parent.spawn(LightBundle {
                 transform: Transform::from_translation(Vec3::new(0.0, 30.0, 0.0)),
                 ..Default::default()
             });
         });
 
     commands
-        .spawn()
-        .insert_bundle(PbrBundle::default())
-        .insert(SkyboxBox)
+        .spawn((
+            PbrBundle::default(),
+            SkyboxBox,
+        ))
         .with_children(|parent| {
             let render_pipelines = SkyMaterial::pipeline(pipelines, shaders, render_graph);
             let texture_handle: Handle<Texture> = asset_server.load("bevy_logo_dark.png");
@@ -88,9 +86,8 @@ fn setup(
                 texture: texture_handle,
             });
             // The `parent`'s transform will be manipulated by the plugin
-            parent
-                .spawn()
-                .insert_bundle(PbrBundle {
+            parent.spawn((
+                PbrBundle {
                     mesh: meshes.add(Mesh::from(shape::Quad {
                         flip: false,
                         size: Vec2::new(20., 7.),
@@ -99,17 +96,18 @@ fn setup(
                     // Props should be positioned near to a radius of 1.0
                     transform: Transform::from_translation(Vec3::new(-5., 0.1, -20.0)),
                     ..Default::default()
-                })
-                .insert(sky_material.clone());
-            parent
-                .spawn()
-                .insert_bundle(PbrBundle {
+                },
+                sky_material.clone(),
+            ));
+            parent.spawn((
+                PbrBundle {
                     mesh: meshes.add(Mesh::from(shape::Cube { size: 3. })),
                     render_pipelines: render_pipelines.clone(),
                     transform: Transform::from_translation(Vec3::new(5.2, 3.15, -15.0)),
                     ..Default::default()
-                })
-                .insert(sky_material);
+                },
+                sky_material,
+            ));
         });
 
     // Add a static "board" as some foreground to show camera movement.
@@ -120,12 +118,14 @@ fn setup(
             let br = rng.gen::<f32>() * 0.4 + 0.6;
             let col = Color::rgb(0.6 * br, 1. * br, 0.6 * br);
 
-            commands.spawn().insert_bundle(PbrBundle {
-                mesh: meshes.add(Mesh::from(shape::Plane { size: 1.0 })),
-                material: materials.add(col.into()),
-                transform: Transform::from_translation(Vec3::new(i as f32, 0.0, j as f32)),
-                ..Default::default()
-            });
+            commands.spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(shape::Plane { size: 1.0 })),
+                    material: materials.add(col.into()),
+                    transform: Transform::from_translation(Vec3::new(i as f32, 0.0, j as f32)),
+                    ..Default::default()
+                },
+            ));
         }
     }
 }
