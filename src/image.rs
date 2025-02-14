@@ -28,181 +28,204 @@
 //! and then paste it into a new file.
 
 use bevy::prelude::*;
-use bevy::render::{
-    mesh::VertexAttributeValues, render_resource::PipelineDescriptor, render_graph::RenderGraph,
-};
-use image::{open, Rgb, RgbImage};
+use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, ImageReader, Rgba, RgbaImage};
 use itertools::Itertools;
 use std::collections::HashMap;
-
-use crate::material::SkyMaterial;
+use std::path::Path;
 
 /// `image` module errors.
 #[derive(Debug, Clone, Copy)]
 pub enum ImageError {
+    BadEnv,
     FileNotFound,
+    DecodeFailed,
     BackgroundNotDetermined,
     NetNotFound,
     NotAligned,
-}
-
-/// Create the `SkyboxBox` using settings from the `SkyboxPlugin`.
-pub fn create_skybox(
-    mut commands: Commands,
-    pipelines: ResMut<Assets<PipelineDescriptor>>,
-    shaders: ResMut<Assets<Shader>>,
-    render_graph: ResMut<RenderGraph>,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<crate::material::SkyMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    plugin: Res<crate::SkyboxPlugin>,
-) {
-    if let Some(image) = &plugin.image {
-        // Get the mesh for the image given.
-        let mesh = get_mesh(image).expect("Good image");
-        // Load image as a texture asset.
-        let texture_handle: Handle<Texture> = asset_server.load(image.as_str());
-
-        // Even before the texture is loaded we can updated the material.
-        let sky_material = materials.add(SkyMaterial {
-            texture: texture_handle,
-        });
-
-        let render_pipelines = SkyMaterial::pipeline(pipelines, shaders, render_graph);
-
-        // Create the PbrBundle tagged as a skybox.
-        commands.spawn((
-            Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(sky_material),
-            RenderPipeline(render_pipeline),
-            crate::SkyboxBox,
-        ));
-    }
+    CopyError,
 }
 
 /// Get the skybox mesh, including the uv values for the given texture
 /// image. The box has unit edges is centred on the origin.
-fn get_mesh(image: &str) -> Result<Mesh, ImageError> {
-    let (fx, fy) = find_uv(image)?;
-    // This relies on the particular face and vertex order of the
-    // `shape::cube`.
-    let mut mesh = Mesh::from(shape::Cube { size: -1.0 });
-    let uv = VertexAttributeValues::Float2(vec![
-        [fx[1], fy[1]],
-        [fx[0], fy[1]],
-        [fx[0], fy[2]],
-        [fx[1], fy[2]],
-        [fx[2], fy[2]],
-        [fx[3], fy[2]],
-        [fx[3], fy[1]],
-        [fx[2], fy[1]],
-        [fx[3], fy[1]],
-        [fx[3], fy[2]],
-        [fx[4], fy[2]],
-        [fx[4], fy[1]],
-        [fx[1], fy[1]],
-        [fx[1], fy[2]],
-        [fx[2], fy[2]],
-        [fx[2], fy[1]],
-        [fx[3], fy[2]],
-        [fx[2], fy[2]],
-        [fx[2], fy[3]],
-        [fx[3], fy[3]],
-        [fx[3], fy[0]],
-        [fx[2], fy[0]],
-        [fx[2], fy[1]],
-        [fx[3], fy[1]],
-    ]);
-    *mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0).expect("Attribute expected") = uv;
-    Ok(mesh)
+pub fn get_skybox(image_name: &str) -> Result<Image, ImageError> {
+    // Load the image for processing.
+    let root_path = std::env::var_os("CARGO_MANIFEST_DIR").ok_or(ImageError::BadEnv)?;
+    let path = Path::new(&root_path).join("assets").join(image_name);
+    println!("Path: {:?}", path);
+    let reader = ImageReader::open(path).map_err(|e| {println!("Error: {:?}", e); ImageError::FileNotFound})?;
+    let orig_image = reader.decode().map_err(|e| {println!("Error: {:?}", e); ImageError::DecodeFailed})?;
+    let orig_rgba = DynamicImage::ImageRgba8(orig_image.to_rgba8());
+    let meas = ImageMeasurements::find_measurements(&orig_rgba)?;
+    let shaped_image = meas.new_image(&orig_rgba)?;
+    Ok(shaped_image)
 }
 
-/// Find the dimensions of the skybox net in the image.
-fn find_uv(image: &str) -> Result<(Vec<f32>, Vec<f32>), ImageError> {
-    // Load the image for processing.
-    let rgb: RgbImage = open(&format!("assets/{}", image))
-        .map_err(|_| ImageError::FileNotFound)?
-        .into_rgb8();
-    // Find the background colour.
-    let background = find_background(&rgb)?;
-    // Measure the x values of the vertical edges of the net.
-    let dy = rgb.height() / 6;
-    let mid_x_min = search_from_left(&rgb, background, dy * 3)?;
-    let mid_x_max = search_from_right(&rgb, background, dy * 3)?;
-    let top_x_min = search_from_left(&rgb, background, dy * 1)?;
-    let top_x_max = search_from_right(&rgb, background, dy * 1)?;
-    let bot_x_min = search_from_left(&rgb, background, dy * 5)?;
-    let bot_x_max = search_from_right(&rgb, background, dy * 5)?;
-    if (top_x_min as i32 - bot_x_min as i32).abs() > 8 {
-        return Err(ImageError::NotAligned);
-    }
-    if (top_x_max as i32 - bot_x_max as i32).abs() > 8 {
-        return Err(ImageError::NotAligned);
-    }
-    let short_x_min = (top_x_min + bot_x_min) / 2;
-    let short_x_max = (top_x_max + bot_x_max) / 2;
-    // Assuming the shape, calculate the x values of the vertices and check them.
-    let vec_x = vec![
-        mid_x_min,
-        (short_x_min + mid_x_min) / 2,
-        short_x_min,
-        short_x_max,
-        mid_x_max,
-    ];
-    let mut diff_x = vec_x
-        .as_slice()
-        .windows(2)
-        .map(|w| w[1] as i32 - w[0] as i32)
-        .collect::<Vec<i32>>();
-    diff_x.sort_unstable();
-    if diff_x[3] - diff_x[0] > 16 {
-        return Err(ImageError::NotAligned);
+/// `image` module measurements of positions in pixels.
+///
+/// See docs for the explanation of the indices.
+pub struct ImageMeasurements {
+    vec_x: Vec<u32>,
+    vec_y: Vec<u32>,
+}
+
+impl ImageMeasurements {
+    pub fn new_image(&self, old_image: &DynamicImage) -> Result<Image, ImageError> {
+        let size = self.measure_rect();
+        let mut new_image = RgbaImage::new(size.0, size.1 * 6);
+
+        // +X
+        self.copy_side(old_image, &mut new_image, size, 3, 1, 0)?;
+        // -X
+        self.copy_side(old_image, &mut new_image, size, 1, 1, 0)?;
+        // +Y
+        self.copy_side(old_image, &mut new_image, size, 2, 0, 0)?;
+        // -Y
+        self.copy_side(old_image, &mut new_image, size, 2, 2, 0)?;
+        // +Z
+        self.copy_side(old_image, &mut new_image, size, 2, 1, 0)?;
+        // -Z
+        self.copy_side(old_image, &mut new_image, size, 0, 1, 0)?;
+
+        let image = Image::from_dynamic(
+            image::DynamicImage::from(new_image),
+            true,
+            bevy::asset::RenderAssetUsages::all(),
+        );
+        Ok(image)
     }
 
-    // Measure the y values of the horizontal edges of the net.
-    let mid_y_min = search_from_top(&rgb, background, (vec_x[2] + vec_x[3]) / 2)?;
-    let mid_y_max = search_from_bottom(&rgb, background, (vec_x[2] + vec_x[3]) / 2)?;
-    let left_y_min = search_from_top(&rgb, background, vec_x[1])?;
-    let left_y_max = search_from_bottom(&rgb, background, vec_x[1])?;
-    let right_y_min = search_from_top(&rgb, background, (vec_x[3] + vec_x[4]) / 2)?;
-    let right_y_max = search_from_bottom(&rgb, background, (vec_x[3] + vec_x[4]) / 2)?;
-    if (left_y_min as i32 - right_y_min as i32).abs() > 8 {
-        return Err(ImageError::NotAligned);
-    }
-    if (left_y_max as i32 - right_y_max as i32).abs() > 8 {
-        return Err(ImageError::NotAligned);
-    }
-    let short_y_min = (left_y_min + right_y_min) / 2;
-    let short_y_max = (left_y_max + right_y_max) / 2;
-    // Assuming the shape, calculate the y values to return and check them.
-    let vec_y = vec![mid_y_min, short_y_min, short_y_max, mid_y_max];
-    let mut diff_y = vec_y
-        .as_slice()
-        .windows(2)
-        .map(|w| w[1] as i32 - w[0] as i32)
-        .collect::<Vec<i32>>();
-    diff_y.sort_unstable();
-    if diff_y[2] - diff_y[0] > 16 {
-        return Err(ImageError::NotAligned);
+    /// Copy a side as part of the new_image creation
+    fn copy_side(
+        &self,
+        old_image: &DynamicImage,
+        new_image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
+        size: (u32, u32),
+        x_idx: usize,
+        y_idx: usize,
+        out_idx: usize,
+    ) -> Result<(), ImageError> {
+        let offset_x = (self.vec_x[x_idx + 1] - self.vec_x[x_idx] - size.0) / 2;
+        let offset_y = (self.vec_y[y_idx + 1] - self.vec_y[y_idx] - size.1) / 2;
+        new_image.copy_from(
+            &old_image.view(
+                self.vec_x[x_idx] + offset_x,
+                self.vec_y[y_idx] + offset_y,
+                size.0,
+                size.1,
+            ).to_image(),
+            0,
+            size.1 * (out_idx as u32),
+        ).map_err(|_| ImageError::CopyError)
     }
 
-    // Pull in the borders. The matches won't be as good but maybe we can avoid some bad edges.
-    // let adj = 2;
-    // let vec_x = [vec_x[0] + adj, vec_x[1] + adj, vec_x[2] + adj, vec_x[3] - adj, vec_x[4] - adj];
-    // let vec_y = [vec_y[0] + adj, vec_y[1] + adj, vec_y[2] - adj, vec_y[3] - adj];
+    /// Find the dimensions of the skybox net in the image.
+    pub fn find_measurements(rgb: &DynamicImage) -> Result<Self, ImageError> {
+        // Find the background colour.
+        let background = find_background(&rgb)?;
+        // Measure the x values of the vertical edges of the net.
+        let dy = rgb.height() / 6;
+        let mid_x_min = search_from_left(&rgb, background, dy * 3)?;
+        let mid_x_max = search_from_right(&rgb, background, dy * 3)?;
+        let top_x_min = search_from_left(&rgb, background, dy * 1)?;
+        let top_x_max = search_from_right(&rgb, background, dy * 1)?;
+        let bot_x_min = search_from_left(&rgb, background, dy * 5)?;
+        let bot_x_max = search_from_right(&rgb, background, dy * 5)?;
+        if (top_x_min as i32 - bot_x_min as i32).abs() > 8 {
+            return Err(ImageError::NotAligned);
+        }
+        if (top_x_max as i32 - bot_x_max as i32).abs() > 8 {
+            return Err(ImageError::NotAligned);
+        }
+        let short_x_min = (top_x_min + bot_x_min) / 2;
+        let short_x_max = (top_x_max + bot_x_max) / 2;
+        // Assuming the shape, calculate the x values of the vertices and check them.
+        let vec_x = vec![
+            mid_x_min,
+            (short_x_min + mid_x_min) / 2,
+            short_x_min,
+            short_x_max,
+            mid_x_max,
+        ];
+        let mut diff_x = vec_x
+            .as_slice()
+            .windows(2)
+            .map(|w| w[1] as i32 - w[0] as i32)
+            .collect::<Vec<i32>>();
+        diff_x.sort_unstable();
+        if diff_x[3] - diff_x[0] > 16 {
+            return Err(ImageError::NotAligned);
+        }
 
-    // Return as fractions of whole image. Apparently the 0.0 and 1.0 are at the
-    // outer edge of the squares represented by the pixels, and we want the middle
-    // of the edge pixels.
-    let f_x = vec_x
-        .iter()
-        .map(|x| (*x as f32 + 0.5) / (rgb.width() as f32))
-        .collect::<Vec<f32>>();
-    let f_y = vec_y
-        .iter()
-        .map(|y| (*y as f32 + 0.5) / (rgb.height() as f32))
-        .collect::<Vec<f32>>();
-    Ok((f_x, f_y))
+        // Measure the y values of the horizontal edges of the net.
+        let mid_y_min = search_from_top(&rgb, background, (vec_x[2] + vec_x[3]) / 2)?;
+        let mid_y_max = search_from_bottom(&rgb, background, (vec_x[2] + vec_x[3]) / 2)?;
+        let left_y_min = search_from_top(&rgb, background, vec_x[1])?;
+        let left_y_max = search_from_bottom(&rgb, background, vec_x[1])?;
+        let right_y_min = search_from_top(&rgb, background, (vec_x[3] + vec_x[4]) / 2)?;
+        let right_y_max = search_from_bottom(&rgb, background, (vec_x[3] + vec_x[4]) / 2)?;
+        if (left_y_min as i32 - right_y_min as i32).abs() > 8 {
+            return Err(ImageError::NotAligned);
+        }
+        if (left_y_max as i32 - right_y_max as i32).abs() > 8 {
+            return Err(ImageError::NotAligned);
+        }
+        let short_y_min = (left_y_min + right_y_min) / 2;
+        let short_y_max = (left_y_max + right_y_max) / 2;
+
+        // Assuming the shape, calculate the y values to return and check them.
+        let vec_y = vec![mid_y_min, short_y_min, short_y_max, mid_y_max];
+        let mut diff_y = vec_y
+            .as_slice()
+            .windows(2)
+            .map(|w| w[1] as i32 - w[0] as i32)
+            .collect::<Vec<i32>>();
+        diff_y.sort_unstable();
+        if diff_y[2] - diff_y[0] > 16 {
+            return Err(ImageError::NotAligned);
+        }
+
+        // Pull in the borders. The matches won't be as good but maybe we can avoid some bad edges.
+        // let adj = 2;
+        // let vec_x = [vec_x[0] + adj, vec_x[1] + adj, vec_x[2] + adj, vec_x[3] - adj, vec_x[4] - adj];
+        // let vec_y = [vec_y[0] + adj, vec_y[1] + adj, vec_y[2] - adj, vec_y[3] - adj];
+
+        Ok(ImageMeasurements { vec_x, vec_y })
+    }
+
+    /// Determine the size of each image in the net, assuming that they all have to be the same
+    /// so that we can copy pixel for pixel into the output without needing to scale.
+    fn measure_rect(&self) -> (u32, u32) {
+        let min_x = self
+            .vec_x
+            .windows(2)
+            .map(|x| x[1] - x[0])
+            .min()
+            .expect("Four x intervals");
+        let min_y = self
+            .vec_y
+            .windows(2)
+            .map(|y| y[1] - y[0])
+            .min()
+            .expect("Three y intervals");
+        (min_x, min_y)
+    }
+
+    /// Return as fractions of whole image. Apparently the 0.0 and 1.0 are at the
+    /// outer edge of the squares represented by the pixels, and we want the middle
+    /// of the edge pixels.
+    pub fn get_uv(&self, rgb: &RgbaImage) -> (Vec<f32>, Vec<f32>) {
+        let f_x = self
+            .vec_x
+            .iter()
+            .map(|x| (*x as f32 + 0.5) / (rgb.width() as f32))
+            .collect::<Vec<f32>>();
+        let f_y = self
+            .vec_y
+            .iter()
+            .map(|y| (*y as f32 + 0.5) / (rgb.height() as f32))
+            .collect::<Vec<f32>>();
+        (f_x, f_y)
+    }
 }
 
 /// Search 8 points in the top and bottom sectors where we expect the background
@@ -210,7 +233,7 @@ fn find_uv(image: &str) -> Result<(Vec<f32>, Vec<f32>), ImageError> {
 ///
 /// This is more complicated that is currently required, but might survive the losing of the
 /// image requirements in the future.
-fn find_background(rgb: &RgbImage) -> Result<Rgb<u8>, ImageError> {
+pub fn find_background(rgb: &DynamicImage) -> Result<Rgba<u8>, ImageError> {
     // Sample select points in the image likely to be background.
     let samples = (0..4)
         .cartesian_product(0..2)
@@ -220,15 +243,14 @@ fn find_background(rgb: &RgbImage) -> Result<Rgb<u8>, ImageError> {
                 (y * 4 + 1) * rgb.height() / 6,
             )
         })
-        .copied()
-        .collect::<Vec<Rgb<u8>>>();
+        .collect::<Vec<Rgba<u8>>>();
 
     // Find the most common background colour.
-    let mut sample_freq = HashMap::<Rgb<u8>, usize>::new();
+    let mut sample_freq = HashMap::<Rgba<u8>, usize>::new();
     for s in samples {
         *sample_freq.entry(s).or_insert(0) += 1;
     }
-    let mut sample_hist = sample_freq.drain().collect::<Vec<(Rgb<u8>, usize)>>();
+    let mut sample_hist = sample_freq.drain().collect::<Vec<(Rgba<u8>, usize)>>();
     sample_hist.sort_by(|a, b| (a.1).cmp(&b.1));
     let background = sample_hist.iter().last().expect("Histogram");
 
@@ -241,9 +263,9 @@ fn find_background(rgb: &RgbImage) -> Result<Rgb<u8>, ImageError> {
 }
 
 /// Search horizontally from the left to find the first non-background pixel.
-fn search_from_left(rgb: &RgbImage, bg: Rgb<u8>, y: u32) -> Result<u32, ImageError> {
+pub fn search_from_left(rgb: &DynamicImage, bg: Rgba<u8>, y: u32) -> Result<u32, ImageError> {
     for x in 0..rgb.width() {
-        if *rgb.get_pixel(x, y) != bg {
+        if rgb.get_pixel(x, y) != bg {
             return Ok(x);
         }
     }
@@ -251,9 +273,9 @@ fn search_from_left(rgb: &RgbImage, bg: Rgb<u8>, y: u32) -> Result<u32, ImageErr
 }
 
 /// Search horizontally from the right to find the first non-background pixel.
-fn search_from_right(rgb: &RgbImage, bg: Rgb<u8>, y: u32) -> Result<u32, ImageError> {
+pub fn search_from_right(rgb: &DynamicImage, bg: Rgba<u8>, y: u32) -> Result<u32, ImageError> {
     for x in (0..rgb.width()).rev() {
-        if *rgb.get_pixel(x, y) != bg {
+        if rgb.get_pixel(x, y) != bg {
             return Ok(x);
         }
     }
@@ -261,9 +283,9 @@ fn search_from_right(rgb: &RgbImage, bg: Rgb<u8>, y: u32) -> Result<u32, ImageEr
 }
 
 /// Search vertically from the top to find the first non-background pixel.
-fn search_from_top(rgb: &RgbImage, bg: Rgb<u8>, x: u32) -> Result<u32, ImageError> {
+pub fn search_from_top(rgb: &DynamicImage, bg: Rgba<u8>, x: u32) -> Result<u32, ImageError> {
     for y in 0..rgb.height() {
-        if *rgb.get_pixel(x, y) != bg {
+        if rgb.get_pixel(x, y) != bg {
             return Ok(y);
         }
     }
@@ -271,9 +293,9 @@ fn search_from_top(rgb: &RgbImage, bg: Rgb<u8>, x: u32) -> Result<u32, ImageErro
 }
 
 /// Search vertically from the bottom to find the first non-background pixel.
-fn search_from_bottom(rgb: &RgbImage, bg: Rgb<u8>, x: u32) -> Result<u32, ImageError> {
+pub fn search_from_bottom(rgb: &DynamicImage, bg: Rgba<u8>, x: u32) -> Result<u32, ImageError> {
     for y in (0..rgb.height()).rev() {
-        if *rgb.get_pixel(x, y) != bg {
+        if rgb.get_pixel(x, y) != bg {
             return Ok(y);
         }
     }

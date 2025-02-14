@@ -2,15 +2,14 @@ use bevy::prelude::*;
 use bevy_skybox::{SkyboxCamera, SkyboxPlugin};
 
 fn setup(mut commands: Commands) {
-    commands.spawn((
-        Camera3d,
-        SkyboxCamera,
-    ));}
+    commands.spawn((Camera3d::default(), SkyboxCamera));
+}
 
 fn main() {
-    App::build()
+    App::new()
         .add_plugins(DefaultPlugins)
         .add_systems(Startup, setup)
-        .add_plugin(SkyboxPlugin::from_image_file("sky1.png"))
+        .add_plugins(SkyboxPlugin::from_image_file("sky1.png"))
         .run();
+    println!("End");
 }

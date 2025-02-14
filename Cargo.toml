@@ -13,11 +13,10 @@ edition = "2021"
 include = ["src/**/*", "README.md", "CHANGELOG.md", "assets/*.vert", "assets/*.frag"]
 
 [dependencies]
-bevy = "0.15"
-image = "0.25"
+bevy = { version = "0.15", default-features = false, features = [ "bevy_core_pipeline", "bevy_render", "bevy_pbr" ] }
+image = { version = "0.25", default-features = false, features = [ "png", "tiff" ] }
 itertools = "0.14"
 
 [dev-dependencies]
-bevy_fly_camera = "0.10"
-bevy_log = "0.15"
+bevy_flycam = "0.15"
 rand = "0.9"
