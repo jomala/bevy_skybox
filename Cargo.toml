@@ -13,8 +13,8 @@ edition = "2021"
 include = ["src/**/*", "README.md", "CHANGELOG.md", "assets/*.vert", "assets/*.frag"]
 
 [dependencies]
-bevy = { version = "0.15", default-features = false, features = [ "bevy_core_pipeline", "bevy_render", "bevy_pbr" ] }
-image = { version = "0.25", default-features = false, features = [ "png", "tiff" ] }
+bevy = { version = "0.15" } # , default-features = false, features = [ "bevy_core_pipeline", "bevy_render", "bevy_pbr" ] }
+image = { version = "0.25", default-features = false, features = [ "png" ] }
 itertools = "0.14"
 
 [dev-dependencies]

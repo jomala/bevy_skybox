@@ -4,7 +4,7 @@
 //! * The skybox is a cube.
 //! * The y-axis is up.
 //! * The image provides a net for a cube in the same format as
-//!   `assets/sky1.png`, ie. with the vertical sides in a strip
+//!   `assets/sky1.png`, ie. with the vertical faces in a strip
 //!   in the middle and the top and bottom above and below the
 //!   third square from the left in the strip.
 //! * The image doesn't have a specific "front" direction.
@@ -28,7 +28,9 @@
 //! and then paste it into a new file.
 
 use bevy::prelude::*;
-use image::{DynamicImage, GenericImage, GenericImageView, ImageBuffer, ImageReader, Rgba, RgbaImage};
+use image::{
+    DynamicImage, GenericImage, GenericImageView, ImageBuffer, ImageReader, Rgba, RgbaImage,
+};
 use itertools::Itertools;
 use std::collections::HashMap;
 use std::path::Path;
@@ -51,9 +53,15 @@ pub fn get_skybox(image_name: &str) -> Result<Image, ImageError> {
     // Load the image for processing.
     let root_path = std::env::var_os("CARGO_MANIFEST_DIR").ok_or(ImageError::BadEnv)?;
     let path = Path::new(&root_path).join("assets").join(image_name);
-    println!("Path: {:?}", path);
-    let reader = ImageReader::open(path).map_err(|e| {println!("Error: {:?}", e); ImageError::FileNotFound})?;
-    let orig_image = reader.decode().map_err(|e| {println!("Error: {:?}", e); ImageError::DecodeFailed})?;
+    println!("Skybox path: {:?}", path);
+    let reader = ImageReader::open(path).map_err(|e| {
+        println!("Skybox load error: {:?}", e);
+        ImageError::FileNotFound
+    })?;
+    let orig_image = reader.decode().map_err(|e| {
+        println!("Skybox decode error: {:?}", e);
+        ImageError::DecodeFailed
+    })?;
     let orig_rgba = DynamicImage::ImageRgba8(orig_image.to_rgba8());
     let meas = ImageMeasurements::find_measurements(&orig_rgba)?;
     let shaped_image = meas.new_image(&orig_rgba)?;
@@ -70,21 +78,21 @@ pub struct ImageMeasurements {
 
 impl ImageMeasurements {
     pub fn new_image(&self, old_image: &DynamicImage) -> Result<Image, ImageError> {
-        let size = self.measure_rect();
-        let mut new_image = RgbaImage::new(size.0, size.1 * 6);
+        let side = self.measure_side_length();
+        let mut new_image = RgbaImage::new(side, side * 6);
 
         // +X
-        self.copy_side(old_image, &mut new_image, size, 3, 1, 0)?;
+        self.copy_face(old_image, &mut new_image, side, 3, 1, 0)?;
         // -X
-        self.copy_side(old_image, &mut new_image, size, 1, 1, 0)?;
+        self.copy_face(old_image, &mut new_image, side, 1, 1, 1)?;
         // +Y
-        self.copy_side(old_image, &mut new_image, size, 2, 0, 0)?;
+        self.copy_face(old_image, &mut new_image, side, 2, 0, 2)?;
         // -Y
-        self.copy_side(old_image, &mut new_image, size, 2, 2, 0)?;
+        self.copy_face(old_image, &mut new_image, side, 2, 2, 3)?;
         // +Z
-        self.copy_side(old_image, &mut new_image, size, 2, 1, 0)?;
+        self.copy_face(old_image, &mut new_image, side, 2, 1, 4)?;
         // -Z
-        self.copy_side(old_image, &mut new_image, size, 0, 1, 0)?;
+        self.copy_face(old_image, &mut new_image, side, 0, 1, 5)?;
 
         let image = Image::from_dynamic(
             image::DynamicImage::from(new_image),
@@ -94,28 +102,32 @@ impl ImageMeasurements {
         Ok(image)
     }
 
-    /// Copy a side as part of the new_image creation
-    fn copy_side(
+    /// Copy a face as part of the new_image creation
+    fn copy_face(
         &self,
         old_image: &DynamicImage,
         new_image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>,
-        size: (u32, u32),
+        side: u32,
         x_idx: usize,
         y_idx: usize,
         out_idx: usize,
     ) -> Result<(), ImageError> {
-        let offset_x = (self.vec_x[x_idx + 1] - self.vec_x[x_idx] - size.0) / 2;
-        let offset_y = (self.vec_y[y_idx + 1] - self.vec_y[y_idx] - size.1) / 2;
-        new_image.copy_from(
-            &old_image.view(
-                self.vec_x[x_idx] + offset_x,
-                self.vec_y[y_idx] + offset_y,
-                size.0,
-                size.1,
-            ).to_image(),
-            0,
-            size.1 * (out_idx as u32),
-        ).map_err(|_| ImageError::CopyError)
+        let offset_x = (self.vec_x[x_idx + 1] - self.vec_x[x_idx] - side) / 2;
+        let offset_y = (self.vec_y[y_idx + 1] - self.vec_y[y_idx] - side) / 2;
+        new_image
+            .copy_from(
+                &old_image
+                    .view(
+                        self.vec_x[x_idx] + offset_x,
+                        self.vec_y[y_idx] + offset_y,
+                        side,
+                        side,
+                    )
+                    .to_image(),
+                0,
+                side * (out_idx as u32),
+            )
+            .map_err(|_| ImageError::CopyError)
     }
 
     /// Find the dimensions of the skybox net in the image.
@@ -194,7 +206,7 @@ impl ImageMeasurements {
 
     /// Determine the size of each image in the net, assuming that they all have to be the same
     /// so that we can copy pixel for pixel into the output without needing to scale.
-    fn measure_rect(&self) -> (u32, u32) {
+    fn measure_side_length(&self) -> u32 {
         let min_x = self
             .vec_x
             .windows(2)
@@ -207,31 +219,16 @@ impl ImageMeasurements {
             .map(|y| y[1] - y[0])
             .min()
             .expect("Three y intervals");
-        (min_x, min_y)
-    }
-
-    /// Return as fractions of whole image. Apparently the 0.0 and 1.0 are at the
-    /// outer edge of the squares represented by the pixels, and we want the middle
-    /// of the edge pixels.
-    pub fn get_uv(&self, rgb: &RgbaImage) -> (Vec<f32>, Vec<f32>) {
-        let f_x = self
-            .vec_x
-            .iter()
-            .map(|x| (*x as f32 + 0.5) / (rgb.width() as f32))
-            .collect::<Vec<f32>>();
-        let f_y = self
-            .vec_y
-            .iter()
-            .map(|y| (*y as f32 + 0.5) / (rgb.height() as f32))
-            .collect::<Vec<f32>>();
-        (f_x, f_y)
+        let side = min_x.min(min_y);
+        println!("Skybox side length: {}", side);
+        side
     }
 }
 
 /// Search 8 points in the top and bottom sectors where we expect the background
 /// in most points.
 ///
-/// This is more complicated that is currently required, but might survive the losing of the
+/// This is more complicated that is currently required, but might survive the loosening of the
 /// image requirements in the future.
 pub fn find_background(rgb: &DynamicImage) -> Result<Rgba<u8>, ImageError> {
     // Sample select points in the image likely to be background.
@@ -272,11 +269,11 @@ pub fn search_from_left(rgb: &DynamicImage, bg: Rgba<u8>, y: u32) -> Result<u32,
     Err(ImageError::NetNotFound)
 }
 
-/// Search horizontally from the right to find the first non-background pixel.
+/// Search horizontally from the right to find the last background pixel.
 pub fn search_from_right(rgb: &DynamicImage, bg: Rgba<u8>, y: u32) -> Result<u32, ImageError> {
     for x in (0..rgb.width()).rev() {
         if rgb.get_pixel(x, y) != bg {
-            return Ok(x);
+            return Ok(x + 1);
         }
     }
     Err(ImageError::NetNotFound)
@@ -292,11 +289,11 @@ pub fn search_from_top(rgb: &DynamicImage, bg: Rgba<u8>, x: u32) -> Result<u32, 
     Err(ImageError::NetNotFound)
 }
 
-/// Search vertically from the bottom to find the first non-background pixel.
+/// Search vertically from the bottom to find the last background pixel.
 pub fn search_from_bottom(rgb: &DynamicImage, bg: Rgba<u8>, x: u32) -> Result<u32, ImageError> {
     for y in (0..rgb.height()).rev() {
         if rgb.get_pixel(x, y) != bg {
-            return Ok(y);
+            return Ok(y +  1);
         }
     }
     Err(ImageError::NetNotFound)
