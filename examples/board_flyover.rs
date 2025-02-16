@@ -7,7 +7,7 @@
 //! of the board) to show that the skybox is not affected by it.
 //!
 //! ```
-//! cargo +nightly run --release --example board_flyover -- sky2.png
+//! cargo --example board_flyover -- sky2.png
 //! ```
 //!
 //! The controls are:
@@ -15,6 +15,7 @@
 //! - Shift - Move downward
 //! - Space - Move upward
 //! - Mouse - Look around
+//! - Escape - Return the mouse to the OS
 
 use bevy::prelude::*;
 use bevy_flycam::prelude::*;
@@ -46,10 +47,10 @@ fn setup(
         .spawn((
             Camera3d::default(),
             Transform::from_translation(Vec3::new(0.0, 2.0, -4.0))
-                 .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
+                .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
             PerspectiveProjection {
-                 far: 200.0,
-                 ..Default::default()
+                far: 200.0,
+                ..Default::default()
             },
             SkyboxCamera,
             FlyCam,

@@ -1,11 +1,11 @@
 # CHANGELOG
 
-## 0.6.0 (2025-02-11)
+## 0.6.0 (2025-02-16)
 
 * Updated for Bevy v0.15
-* Use the `Skybox` component
+* Use the Bevy `Skybox` component
 * Remove the "props" demo
-* Switch to the better-maintained bevy_flycam
+* Switch to the better-maintained bevy_flycam for the board_flyover demo
 
 ## 0.5.0 (2021-07-21)
 

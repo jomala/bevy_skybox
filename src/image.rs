@@ -11,6 +11,8 @@
 //! * It has an exact background colour outside the net, and that
 //!   exact colour does not appear around the edge the net.
 //! * The net is well-aligned with the image border.
+//! * (In this version) the images are square, not stretched, so they
+//!   can just be copied pixel for pixel into the requried cubemap format.
 //!
 //! The image is searched by
 //! * sampling 8 points, assuming that 6 at least will be the background colour
@@ -47,21 +49,13 @@ pub enum ImageError {
     CopyError,
 }
 
-/// Get the skybox mesh, including the uv values for the given texture
-/// image. The box has unit edges is centred on the origin.
+/// Get the skybox mesh image in the format required - six squares, one above the other.
 pub fn get_skybox(image_name: &str) -> Result<Image, ImageError> {
     // Load the image for processing.
     let root_path = std::env::var_os("CARGO_MANIFEST_DIR").ok_or(ImageError::BadEnv)?;
     let path = Path::new(&root_path).join("assets").join(image_name);
-    println!("Skybox path: {:?}", path);
-    let reader = ImageReader::open(path).map_err(|e| {
-        println!("Skybox load error: {:?}", e);
-        ImageError::FileNotFound
-    })?;
-    let orig_image = reader.decode().map_err(|e| {
-        println!("Skybox decode error: {:?}", e);
-        ImageError::DecodeFailed
-    })?;
+    let reader = ImageReader::open(path).map_err(|_| ImageError::FileNotFound)?;
+    let orig_image = reader.decode().map_err(|_| ImageError::DecodeFailed)?;
     let orig_rgba = DynamicImage::ImageRgba8(orig_image.to_rgba8());
     let meas = ImageMeasurements::find_measurements(&orig_rgba)?;
     let shaped_image = meas.new_image(&orig_rgba)?;
@@ -196,16 +190,13 @@ impl ImageMeasurements {
             return Err(ImageError::NotAligned);
         }
 
-        // Pull in the borders. The matches won't be as good but maybe we can avoid some bad edges.
-        // let adj = 2;
-        // let vec_x = [vec_x[0] + adj, vec_x[1] + adj, vec_x[2] + adj, vec_x[3] - adj, vec_x[4] - adj];
-        // let vec_y = [vec_y[0] + adj, vec_y[1] + adj, vec_y[2] - adj, vec_y[3] - adj];
-
         Ok(ImageMeasurements { vec_x, vec_y })
     }
 
     /// Determine the size of each image in the net, assuming that they all have to be the same
-    /// so that we can copy pixel for pixel into the output without needing to scale.
+    /// and are all square, so that we can copy pixel for pixel into the output without needing to scale.
+    ///
+    /// Use minimums to avoid overlapping outside the net or even the source image.
     fn measure_side_length(&self) -> u32 {
         let min_x = self
             .vec_x
@@ -220,7 +211,6 @@ impl ImageMeasurements {
             .min()
             .expect("Three y intervals");
         let side = min_x.min(min_y);
-        println!("Skybox side length: {}", side);
         side
     }
 }
@@ -293,7 +283,7 @@ pub fn search_from_top(rgb: &DynamicImage, bg: Rgba<u8>, x: u32) -> Result<u32, 
 pub fn search_from_bottom(rgb: &DynamicImage, bg: Rgba<u8>, x: u32) -> Result<u32, ImageError> {
     for y in (0..rgb.height()).rev() {
         if rgb.get_pixel(x, y) != bg {
-            return Ok(y +  1);
+            return Ok(y + 1);
         }
     }
     Err(ImageError::NetNotFound)

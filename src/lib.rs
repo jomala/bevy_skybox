@@ -25,14 +25,14 @@
 mod image;
 
 use bevy::{
-    prelude::*,
     core_pipeline::Skybox,
     image::CompressedImageFormats,
+    prelude::*,
     render::render_resource::{TextureViewDescriptor, TextureViewDimension},
     render::renderer::RenderDevice,
 };
 
-/// Create a secondary camera with a longer draw distance than the main camera.
+/// Create a skybox and attach it to all SkyboxCamera cameras.
 fn create_skybox(
     mut commands: Commands,
     mut plugin: ResMut<SkyboxPlugin>,
@@ -42,7 +42,10 @@ fn create_skybox(
 ) {
     if let Some(image) = &plugin.image {
         // Check that the uncompressed format is supported.
-        assert!(CompressedImageFormats::from_features(render_device.features()).contains(CompressedImageFormats::NONE));
+        assert!(
+            CompressedImageFormats::from_features(render_device.features())
+                .contains(CompressedImageFormats::NONE)
+        );
 
         // Get the skybox image for the image given.
         let mut skybox_image = image::get_skybox(image).expect("Good image");
@@ -73,6 +76,7 @@ fn create_skybox(
     }
 }
 
+/// The system to detect new SkyboxCamera cameras.
 fn new_camera(
     mut commands: Commands,
     plugin: Res<SkyboxPlugin>,
@@ -80,7 +84,6 @@ fn new_camera(
 ) {
     if let Some(skybox_handle) = &plugin.handle {
         for cam in camera_query.iter() {
-            println!("Add camera after");
             commands.entity(cam).insert(Skybox {
                 image: skybox_handle.clone(),
                 brightness: 1000.0,
@@ -89,8 +92,8 @@ fn new_camera(
         }
     }
 }
-/// The `SkyboxCamera` tag attached to the camera (Translation) entity that
-/// triggers the skybox to move with the camera.
+
+/// The `SkyboxCamera` tag attached to the camera triggers the skybox to be added to the camera.
 #[derive(Component)]
 pub struct SkyboxCamera;
 
@@ -103,6 +106,7 @@ pub struct SkyboxPlugin {
 }
 
 impl SkyboxPlugin {
+    /// Create a skybox for all cameras marked with SkyboxCamera
     pub fn from_image_file(image: &str) -> SkyboxPlugin {
         Self {
             image: Some(image.to_owned()),
@@ -110,10 +114,12 @@ impl SkyboxPlugin {
         }
     }
 
-    /// Does not create an image cube, props must then be added to SkyboxCamera
-    /// with a `Skybox` component.
+    /// Remove the skybox from all cameras marked with SkyboxCamera.
     pub fn empty() -> SkyboxPlugin {
-        Self { image: None, handle: None }
+        Self {
+            image: None,
+            handle: None,
+        }
     }
 }
 
