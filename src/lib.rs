@@ -5,116 +5,128 @@
 //!
 //! ```rust
 //! use bevy::prelude::*;
-//! use bevy_skybox::{SkyboxPlugin, SkyboxCamera};
-//!
-//! fn setup(mut commands: Commands) {
-//!		commands
-//! 		.spawn()
-//! 		.insert_bundle(PerspectiveCameraBundle::default())
-//! 		.insert(SkyboxCamera);
-//! }
+//! use bevy_skybox::{SkyboxCamera, SkyboxPlugin};
 //!
 //! fn main() {
-//!		App::build()
-//! 		.add_plugins(DefaultPlugins)
-//! 		.add_startup_system(setup.system())
-//! 		.add_plugin(SkyboxPlugin::from_image_file("sky1.png"))
-//! 		.run();
-//! }
+//!    App::build()
+//!        .add_plugins(DefaultPlugins)
+//!        .add_systems(Startup, setup)
+//!        .add_plugin(SkyboxPlugin::from_image_file("sky1.png"))
+//!        .run();
+//!
+//! fn setup(mut commands: Commands) {
+//!    commands.spawn((
+//!        Camera3d,
+//!        SkyboxCamera,
+//!    ));}
+//!
 //! ```
 
 mod image;
-mod material;
-pub use material::SkyMaterial;
 
-use bevy::prelude::*;
+use bevy::{
+    core_pipeline::Skybox,
+    image::CompressedImageFormats,
+    prelude::*,
+    render::render_resource::{TextureViewDescriptor, TextureViewDimension},
+    render::renderer::RenderDevice,
+};
 
-/// Create a secondary camera with a longer draw distance than the main camera.
-fn create_pipeline(
+/// Create a skybox and attach it to all SkyboxCamera cameras.
+fn create_skybox(
     mut commands: Commands,
-    camera_query: Query<(Entity, &SkyboxCamera)>,
-    skybox_query: Query<(Entity, &SkyboxBox)>,
-    mut active_cameras: ResMut<bevy::render::camera::ActiveCameras>,
-    plugin: Res<crate::SkyboxPlugin>,
+    mut plugin: ResMut<SkyboxPlugin>,
+    render_device: Res<RenderDevice>,
+    mut images: ResMut<Assets<Image>>,
+    camera_query: Query<Entity, With<SkyboxCamera>>,
 ) {
-    // If more than one SkyboxCamera is defined then only one is used.
-    if let Some((cam, _)) = camera_query.iter().next() {
-        // Add a secondary camera as a child of the main camera
-        let child_entity = commands
-            .spawn()
-            .insert_bundle(PerspectiveCameraBundle::default())
-            .id();
-        commands.entity(cam).push_children(&[child_entity]);
+    if let Some(image) = &plugin.image {
+        // Check that the uncompressed format is supported.
+        assert!(
+            CompressedImageFormats::from_features(render_device.features())
+                .contains(CompressedImageFormats::NONE)
+        );
 
-        // Make the secondary camera active.
-        active_cameras.add(&plugin.camera_name);
+        // Get the skybox image for the image given.
+        let mut skybox_image = image::get_skybox(image).expect("Good image");
 
-        // Assign the skybox to the secondary camera.
-        for s in skybox_query.iter() {
-            active_cameras
-                .get_mut(&plugin.camera_name)
-                .expect("Camera defined")
-                .entity = Some(s.0);
+        assert_eq!(skybox_image.texture_descriptor.array_layer_count(), 1);
+        skybox_image.reinterpret_stacked_2d_as_array(6);
+        assert_eq!(skybox_image.texture_descriptor.array_layer_count(), 6);
+
+        skybox_image.texture_view_descriptor = Some(TextureViewDescriptor {
+            dimension: Some(TextureViewDimension::Cube),
+            ..default()
+        });
+
+        let skybox_handle = images.add(skybox_image);
+        plugin.handle = Some(skybox_handle.clone());
+
+        for cam in camera_query.iter() {
+            commands.entity(cam).insert(Skybox {
+                image: skybox_handle.clone(),
+                brightness: 1000.0,
+                ..default()
+            });
+        }
+    } else {
+        for cam in camera_query.iter() {
+            commands.entity(cam).remove::<Skybox>();
         }
     }
 }
 
-/// Translate (but don't rotate) the `SkyboxBox` with the camera (or any entity it is attached
-/// to with a Transform property). If it is not attached to such an
-/// entity then it will not move.
-fn move_skybox(
-    mut skybox_query: Query<(&mut Transform, &SkyboxBox), Without<SkyboxCamera>>,
-    camera_query: Query<(&Transform, &SkyboxCamera)>,
+/// The system to detect new SkyboxCamera cameras.
+fn new_camera(
+    mut commands: Commands,
+    plugin: Res<SkyboxPlugin>,
+    camera_query: Query<Entity, (Added<Camera3d>, With<SkyboxCamera>)>,
 ) {
-    if let Some((cam_trans, _)) = camera_query.iter().next() {
-        for (mut pbr_trans, _) in skybox_query.iter_mut() {
-            // This could also be achieved by manipulating the ViewProj matrix
-            // in the SkyMaterial shader.
-            pbr_trans.translation = cam_trans.translation;
-            pbr_trans.rotation = Quat::IDENTITY;
+    if let Some(skybox_handle) = &plugin.handle {
+        for cam in camera_query.iter() {
+            commands.entity(cam).insert(Skybox {
+                image: skybox_handle.clone(),
+                brightness: 1000.0,
+                ..default()
+            });
         }
     }
 }
 
-/// The `SkyboxCamera` tag attached to the camera (Translation) entity that
-/// triggers the skybox to move with the camera.
+/// The `SkyboxCamera` tag attached to the camera triggers the skybox to be added to the camera.
+#[derive(Component)]
 pub struct SkyboxCamera;
 
-/// The `SkyboxBox` tag attached to the skybox mesh entity.
-pub struct SkyboxBox;
-
 /// The `SkyboxPlugin` object acts as both the plugin and the resource providing the image name.
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct SkyboxPlugin {
     /// The filename of the image in the assets folder.
-    pub image: Option<String>,
-    /// The identifying name of the secondary camera and pipeline for rendering the skybox
-    pub camera_name: String,
+    image: Option<String>,
+    handle: Option<Handle<Image>>,
 }
 
 impl SkyboxPlugin {
+    /// Create a skybox for all cameras marked with SkyboxCamera
     pub fn from_image_file(image: &str) -> SkyboxPlugin {
         Self {
             image: Some(image.to_owned()),
-            camera_name: "Skybox".to_owned(),
+            handle: None,
         }
     }
-    /// Does not create an image cube, props must then be added to SkyboxCamera
-    /// with a `SkyboxBox` component.
+
+    /// Remove the skybox from all cameras marked with SkyboxCamera.
     pub fn empty() -> SkyboxPlugin {
         Self {
             image: None,
-            camera_name: "Skybox".to_owned(),
+            handle: None,
         }
     }
 }
 
 impl Plugin for SkyboxPlugin {
-    fn build(&self, app: &mut AppBuilder) {
-        app.insert_resource(self.clone());
-        app.add_asset::<material::SkyMaterial>();
-        app.add_startup_system(image::create_skybox.system());
-        app.add_startup_system(create_pipeline.system());
-        app.add_system_to_stage(CoreStage::PostUpdate, move_skybox.system().label("skybox"));
+    fn build(&self, app: &mut App) {
+        app.insert_resource(self.clone())
+            .add_systems(Startup, create_skybox)
+            .add_systems(Update, new_camera);
     }
 }
