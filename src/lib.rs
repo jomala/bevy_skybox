@@ -51,7 +51,7 @@ fn create_skybox(
         let mut skybox_image = image::get_skybox(image).expect("Good image");
 
         assert_eq!(skybox_image.texture_descriptor.array_layer_count(), 1);
-        skybox_image.reinterpret_stacked_2d_as_array(6);
+        let _ = skybox_image.reinterpret_stacked_2d_as_array(6);
         assert_eq!(skybox_image.texture_descriptor.array_layer_count(), 6);
 
         skybox_image.texture_view_descriptor = Some(TextureViewDescriptor {

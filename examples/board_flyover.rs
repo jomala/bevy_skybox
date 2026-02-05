@@ -48,10 +48,10 @@ fn setup(
             Camera3d::default(),
             Transform::from_translation(Vec3::new(0.0, 2.0, -4.0))
                 .looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y),
-            PerspectiveProjection {
+            Projection::Perspective(PerspectiveProjection {
                 far: 200.0,
                 ..Default::default()
-            },
+            }),
             SkyboxCamera,
             FlyCam,
         ))

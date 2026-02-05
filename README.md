@@ -42,6 +42,6 @@ cargo run --release --example board_flyover
 
 ## Compatibility
 
-Currently compatible with Bevy 0.15.
+Currently compatible with Bevy 0.18.
 
 Raise an issue or PR if you need support for other versions of Bevy.

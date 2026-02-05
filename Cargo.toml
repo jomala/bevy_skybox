@@ -3,7 +3,7 @@ name = "bevy_skybox"
 description = "A skybox from an image for bevyengine.org"
 categories = ["game-development"]
 keywords = ["bevy", "skybox", "gamedev", "graphics"]
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Jonathan Lawn <Jonathan.M.Lawn@gmail.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -13,10 +13,10 @@ edition = "2021"
 include = ["src/**/*", "README.md", "CHANGELOG.md", "assets/*.vert", "assets/*.frag"]
 
 [dependencies]
-bevy = { version = "0.15" } # , default-features = false, features = [ "bevy_core_pipeline", "bevy_render", "bevy_pbr" ] }
+bevy = { version = "0.18" } # , default-features = false, features = [ "bevy_core_pipeline", "bevy_render", "bevy_pbr" ] }
 image = { version = "0.25", default-features = false, features = [ "png" ] }
 itertools = "0.14"
 
 [dev-dependencies]
-bevy_flycam = "0.15"
+bevy_flycam = "0.18"
 rand = "0.9"
